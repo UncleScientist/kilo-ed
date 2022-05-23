@@ -43,6 +43,7 @@ impl Editor {
             if self.refresh_screen().is_err() {
                 self.die("unable to refresh screen");
             }
+            self.screen.flush()?;
             if self.process_keypress() {
                 break;
             }

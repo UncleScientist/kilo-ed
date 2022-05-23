@@ -18,19 +18,37 @@ impl Screen {
     }
 
     pub fn draw_rows(&mut self) -> Result<()> {
-        for row in 0..self.height {
-            self.stdout
-                .queue(cursor::MoveTo(0, row))?
-                .queue(Print("~".to_string()))?;
-        }
+        const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-        self.stdout.flush()
+        for row in 0..self.height {
+            if row == self.height / 3 {
+                let mut welcome = format!("Kilo editor -- version {VERSION}");
+                welcome.truncate(self.width as usize);
+                self.stdout
+                    .queue(cursor::MoveTo(0, row))?
+                    .queue(Print(welcome))?;
+            } else {
+                self.stdout
+                    .queue(cursor::MoveTo(0, row))?
+                    .queue(Print("~".to_string()))?;
+            }
+        }
+        self.stdout.queue(cursor::MoveTo(0, 0))?;
+        Ok(())
     }
 
     pub fn clear(&mut self) -> Result<()> {
         self.stdout
             .queue(terminal::Clear(terminal::ClearType::All))?
-            .queue(cursor::MoveTo(0, 0))?
-            .flush()
+            .queue(cursor::MoveTo(0, 0))?;
+        Ok(())
+    }
+
+    pub fn flush(&mut self) -> Result<()> {
+        self.stdout.flush()
+    }
+
+    pub fn cursor_position(&self) -> Result<(u16, u16)> {
+        cursor::position()
     }
 }
