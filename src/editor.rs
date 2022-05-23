@@ -28,23 +28,36 @@ impl Editor {
                 KeyEvent {
                     code: KeyCode::Char('q'),
                     modifiers: KeyModifiers::CONTROL,
-                } => Ok(true),
+                } => return Ok(true),
+                KeyEvent {
+                    code: KeyCode::Up,
+                    modifiers: _,
+                } => self.move_cursor('w'),
+                KeyEvent {
+                    code: KeyCode::Down,
+                    modifiers: _,
+                } => self.move_cursor('s'),
+                KeyEvent {
+                    code: KeyCode::Left,
+                    modifiers: _,
+                } => self.move_cursor('a'),
+                KeyEvent {
+                    code: KeyCode::Right,
+                    modifiers: _,
+                } => self.move_cursor('d'),
                 KeyEvent {
                     code: KeyCode::Char(key),
-                    modifiers,
-                } => {
-                    match key {
-                        'w' | 'a' | 's' | 'd' => self.move_cursor(key),
-                        _ => {}
-                    }
-                    Ok(false)
-                }
-                _ => Ok(false),
+                    modifiers: _,
+                } => match key {
+                    'w' | 'a' | 's' | 'd' => self.move_cursor(key),
+                    _ => {}
+                },
+                _ => {}
             }
         } else {
             self.die("Unable to read from keyboard");
-            Ok(false)
         }
+        Ok(false)
     }
 
     pub fn start(&mut self) -> Result<()> {
