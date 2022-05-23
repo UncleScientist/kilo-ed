@@ -47,21 +47,6 @@ impl Editor {
                     modifiers: KeyModifiers::CONTROL,
                 } => return Ok(true),
                 KeyEvent {
-                    code: KeyCode::Up, ..
-                } => self.move_cursor(EditorKey::ArrowUp),
-                KeyEvent {
-                    code: KeyCode::Down,
-                    ..
-                } => self.move_cursor(EditorKey::ArrowDown),
-                KeyEvent {
-                    code: KeyCode::Left,
-                    ..
-                } => self.move_cursor(EditorKey::ArrowLeft),
-                KeyEvent {
-                    code: KeyCode::Right,
-                    ..
-                } => self.move_cursor(EditorKey::ArrowRight),
-                KeyEvent {
                     code: KeyCode::Char(key),
                     ..
                 } => match key {
@@ -71,7 +56,25 @@ impl Editor {
                     }
                     _ => {}
                 },
-                _ => {}
+                KeyEvent { code, .. } => match code {
+                    KeyCode::Home => self.cursor.x = 0,
+                    KeyCode::End => self.cursor.x = self.screen.bounds().x - 1,
+                    KeyCode::Up => self.move_cursor(EditorKey::ArrowUp),
+                    KeyCode::Down => self.move_cursor(EditorKey::ArrowDown),
+                    KeyCode::Left => self.move_cursor(EditorKey::ArrowLeft),
+                    KeyCode::Right => self.move_cursor(EditorKey::ArrowRight),
+                    KeyCode::PageUp | KeyCode::PageDown => {
+                        let bounds = self.screen.bounds();
+                        for _ in 0..bounds.y {
+                            self.move_cursor(if code == KeyCode::PageUp {
+                                EditorKey::ArrowUp
+                            } else {
+                                EditorKey::ArrowDown
+                            })
+                        }
+                    }
+                    _ => {}
+                },
             }
         } else {
             self.die("Unable to read from keyboard");
