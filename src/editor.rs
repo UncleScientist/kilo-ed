@@ -10,6 +10,7 @@ use crate::screen::*;
 pub struct Editor {
     screen: Screen,
     keyboard: Keyboard,
+    cursor: Position,
 }
 
 impl Editor {
@@ -17,22 +18,23 @@ impl Editor {
         Ok(Self {
             screen: Screen::new()?,
             keyboard: Keyboard {},
+            cursor: Position::default(),
         })
     }
 
-    pub fn process_keypress(&mut self) -> bool {
+    pub fn process_keypress(&mut self) -> Result<bool> {
         let c = self.keyboard.read();
 
         match c {
             Ok(KeyEvent {
                 code: KeyCode::Char('q'),
                 modifiers: KeyModifiers::CONTROL,
-            }) => true,
+            }) => Ok(true),
             Err(ResultCode::KeyReadFail) => {
                 self.die("Unable to read from keyboard");
-                false
+                Ok(false)
             }
-            _ => false,
+            _ => Ok(false),
         }
     }
 
@@ -43,8 +45,9 @@ impl Editor {
             if self.refresh_screen().is_err() {
                 self.die("unable to refresh screen");
             }
+            self.screen.move_to(&self.cursor)?;
             self.screen.flush()?;
-            if self.process_keypress() {
+            if self.process_keypress()? {
                 break;
             }
         }

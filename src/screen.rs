@@ -1,6 +1,8 @@
 use crossterm::{cursor, style::Print, terminal, QueueableCommand, Result};
 use std::io::{stdout, Stdout, Write};
 
+use kilo_ed::*;
+
 pub struct Screen {
     stdout: Stdout,
     width: u16,
@@ -42,7 +44,7 @@ impl Screen {
                     .queue(Print("~".to_string()))?;
             }
         }
-        self.stdout.queue(cursor::MoveTo(0, 0))?;
+
         Ok(())
     }
 
@@ -59,5 +61,10 @@ impl Screen {
 
     pub fn cursor_position(&self) -> Result<(u16, u16)> {
         cursor::position()
+    }
+
+    pub fn move_to(&mut self, pos: &Position) -> Result<()> {
+        self.stdout.queue(cursor::MoveTo(pos.x, pos.y))?;
+        Ok(())
     }
 }
