@@ -23,18 +23,27 @@ impl Editor {
     }
 
     pub fn process_keypress(&mut self) -> Result<bool> {
-        let c = self.keyboard.read();
-
-        match c {
-            Ok(KeyEvent {
-                code: KeyCode::Char('q'),
-                modifiers: KeyModifiers::CONTROL,
-            }) => Ok(true),
-            Err(ResultCode::KeyReadFail) => {
-                self.die("Unable to read from keyboard");
-                Ok(false)
+        if let Ok(c) = self.keyboard.read() {
+            match c {
+                KeyEvent {
+                    code: KeyCode::Char('q'),
+                    modifiers: KeyModifiers::CONTROL,
+                } => Ok(true),
+                KeyEvent {
+                    code: KeyCode::Char(key),
+                    modifiers,
+                } => {
+                    match key {
+                        'w' | 'a' | 's' | 'd' => self.move_cursor(key),
+                        _ => {}
+                    }
+                    Ok(false)
+                }
+                _ => Ok(false),
             }
-            _ => Ok(false),
+        } else {
+            self.die("Unable to read from keyboard");
+            Ok(false)
         }
     }
 
@@ -64,5 +73,19 @@ impl Editor {
         let _ = terminal::disable_raw_mode();
         eprintln!("{}: {}", message.into(), errno());
         std::process::exit(1);
+    }
+
+    fn move_cursor(&mut self, key: char) {
+        match key {
+            'a' => {
+                self.cursor.x = self.cursor.x.saturating_sub(1);
+            }
+            'd' => self.cursor.x += 1,
+            'w' => {
+                self.cursor.y = self.cursor.y.saturating_sub(1);
+            }
+            's' => self.cursor.y += 1,
+            _ => self.die("invalid movement character"),
+        }
     }
 }
