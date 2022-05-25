@@ -25,6 +25,7 @@ pub struct Editor {
     keymap: HashMap<char, EditorKey>,
     rows: Vec<String>,
     rowoff: u16,
+    coloff: u16,
 }
 
 impl Editor {
@@ -58,6 +59,7 @@ impl Editor {
             },
             keymap,
             rowoff: 0,
+            coloff: 0,
         })
     }
 
@@ -111,7 +113,8 @@ impl Editor {
             if self.refresh_screen().is_err() {
                 self.die("unable to refresh screen");
             }
-            self.screen.move_to(&self.cursor, self.rowoff)?;
+            self.screen
+                .move_to(&self.cursor, self.rowoff, self.coloff)?;
             self.screen.flush()?;
             if self.process_keypress()? {
                 break;
@@ -123,7 +126,7 @@ impl Editor {
     pub fn refresh_screen(&mut self) -> Result<()> {
         self.scroll();
         self.screen.clear()?;
-        self.screen.draw_rows(&self.rows, self.rowoff)
+        self.screen.draw_rows(&self.rows, self.rowoff, self.coloff)
     }
 
     pub fn die<S: Into<String>>(&mut self, message: S) {
@@ -136,12 +139,11 @@ impl Editor {
     fn move_cursor(&mut self, key: EditorKey) {
         use EditorKey::*;
 
-        let bounds = self.screen.bounds();
         match key {
             Left => {
                 self.cursor.x = self.cursor.x.saturating_sub(1);
             }
-            Right if self.cursor.x <= bounds.x => self.cursor.x += 1,
+            Right => self.cursor.x += 1,
             Up => {
                 self.cursor.y = self.cursor.y.saturating_sub(1);
             }
@@ -157,6 +159,14 @@ impl Editor {
         }
         if self.cursor.y >= self.rowoff + bounds.y {
             self.rowoff = self.cursor.y - bounds.y + 1;
+        }
+
+        if self.cursor.x < self.coloff {
+            self.coloff = self.cursor.x;
+        }
+
+        if self.cursor.x >= self.coloff + bounds.x {
+            self.coloff = self.cursor.x - bounds.x + 1;
         }
     }
 }
