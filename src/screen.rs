@@ -45,10 +45,10 @@ impl Screen {
                         .queue(Print("~".to_string()))?;
                 }
             } else {
-                let len = rows[0].len().min(self.width as usize);
+                let len = rows[row as usize].len().min(self.width as usize);
                 self.stdout
                     .queue(cursor::MoveTo(0, row))?
-                    .queue(Print(rows[0][0..len].to_string()))?;
+                    .queue(Print(rows[row as usize][0..len].to_string()))?;
             }
         }
         Ok(())
