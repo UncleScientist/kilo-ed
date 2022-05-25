@@ -7,7 +7,7 @@ mod editor;
 use editor::*;
 
 fn main() -> Result<()> {
-    let mut editor = Editor::new()?;
+    let mut editor = Editor::new("input.txt")?;
 
     editor.start()?;
 

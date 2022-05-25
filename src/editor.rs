@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::{terminal, Result};
@@ -26,7 +27,14 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn new() -> Result<Self> {
+    pub fn new<P: AsRef<Path>>(filename: P) -> Result<Self> {
+        let first_line = std::fs::read_to_string(filename)
+            .expect("Unable to open file")
+            .split('\n')
+            .next()
+            .unwrap()
+            .to_string();
+
         let mut keymap = HashMap::new();
         keymap.insert('w', EditorKey::Up);
         keymap.insert('s', EditorKey::Down);
@@ -36,7 +44,7 @@ impl Editor {
             screen: Screen::new()?,
             keyboard: Keyboard {},
             cursor: Position::default(),
-            rows: vec!["Hello, world!".to_string()],
+            rows: vec![first_line],
             keymap,
         })
     }
