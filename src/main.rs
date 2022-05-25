@@ -7,7 +7,13 @@ mod editor;
 use editor::*;
 
 fn main() -> Result<()> {
-    let mut editor = Editor::new("input.txt")?;
+    let mut args = std::env::args();
+
+    let mut editor = if args.len() >= 2 {
+        Editor::with_file(args.nth(1).unwrap())?
+    } else {
+        Editor::new()?
+    };
 
     editor.start()?;
 
