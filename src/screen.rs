@@ -19,11 +19,12 @@ impl Screen {
         })
     }
 
-    pub fn draw_rows(&mut self, rows: &[String]) -> Result<()> {
+    pub fn draw_rows(&mut self, rows: &[String], rowoff: u16) -> Result<()> {
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
         for row in 0..self.height {
-            if row >= rows.len() as u16 {
+            let filerow = (row + rowoff) as usize;
+            if filerow >= rows.len() {
                 if rows.is_empty() && row == self.height / 3 {
                     let mut welcome = format!("Kilo editor -- version {VERSION}");
                     welcome.truncate(self.width as usize);
@@ -45,10 +46,10 @@ impl Screen {
                         .queue(Print("~".to_string()))?;
                 }
             } else {
-                let len = rows[row as usize].len().min(self.width as usize);
+                let len = rows[filerow].len().min(self.width as usize);
                 self.stdout
                     .queue(cursor::MoveTo(0, row))?
-                    .queue(Print(rows[row as usize][0..len].to_string()))?;
+                    .queue(Print(rows[filerow][0..len].to_string()))?;
             }
         }
         Ok(())
@@ -71,8 +72,9 @@ impl Screen {
     }
     */
 
-    pub fn move_to(&mut self, pos: &Position) -> Result<()> {
-        self.stdout.queue(cursor::MoveTo(pos.x, pos.y))?;
+    pub fn move_to(&mut self, pos: &Position, rowoff: u16) -> Result<()> {
+        self.stdout
+            .queue(cursor::MoveTo(pos.x, pos.y - rowoff as u16))?;
         Ok(())
     }
 

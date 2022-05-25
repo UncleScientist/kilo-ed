@@ -24,6 +24,7 @@ pub struct Editor {
     cursor: Position,
     keymap: HashMap<char, EditorKey>,
     rows: Vec<String>,
+    rowoff: u16,
 }
 
 impl Editor {
@@ -56,6 +57,7 @@ impl Editor {
                 Vec::from(data)
             },
             keymap,
+            rowoff: 0,
         })
     }
 
@@ -109,7 +111,7 @@ impl Editor {
             if self.refresh_screen().is_err() {
                 self.die("unable to refresh screen");
             }
-            self.screen.move_to(&self.cursor)?;
+            self.screen.move_to(&self.cursor, self.rowoff)?;
             self.screen.flush()?;
             if self.process_keypress()? {
                 break;
@@ -119,8 +121,9 @@ impl Editor {
     }
 
     pub fn refresh_screen(&mut self) -> Result<()> {
+        self.scroll();
         self.screen.clear()?;
-        self.screen.draw_rows(&self.rows)
+        self.screen.draw_rows(&self.rows, self.rowoff)
     }
 
     pub fn die<S: Into<String>>(&mut self, message: S) {
@@ -142,8 +145,18 @@ impl Editor {
             Up => {
                 self.cursor.y = self.cursor.y.saturating_sub(1);
             }
-            Down if self.cursor.y <= bounds.y => self.cursor.y += 1,
+            Down if self.cursor.y < self.rows.len() as u16 => self.cursor.y += 1,
             _ => {}
+        }
+    }
+
+    fn scroll(&mut self) {
+        let bounds = self.screen.bounds();
+        if self.cursor.y < self.rowoff {
+            self.rowoff = self.cursor.y;
+        }
+        if self.cursor.y >= self.rowoff + bounds.y {
+            self.rowoff = self.cursor.y - bounds.y + 1;
         }
     }
 }
