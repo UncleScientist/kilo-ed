@@ -47,11 +47,16 @@ impl Editor {
         keymap.insert('s', EditorKey::Down);
         keymap.insert('a', EditorKey::Left);
         keymap.insert('d', EditorKey::Right);
+        let data = data.into();
         Ok(Self {
             screen: Screen::new()?,
             keyboard: Keyboard {},
             cursor: Position::default(),
-            rows: vec![data.into()],
+            rows: if data.is_empty() {
+                Vec::new()
+            } else {
+                vec![data]
+            },
             keymap,
         })
     }

@@ -24,7 +24,7 @@ impl Screen {
 
         for row in 0..self.height {
             if row >= rows.len() as u16 {
-                if row == self.height / 3 {
+                if rows.is_empty() && row == self.height / 3 {
                     let mut welcome = format!("Kilo editor -- version {VERSION}");
                     welcome.truncate(self.width as usize);
                     if welcome.len() < self.width as usize {
