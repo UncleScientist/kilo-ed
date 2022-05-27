@@ -139,18 +139,18 @@ impl Editor {
     fn move_cursor(&mut self, key: EditorKey) {
         use EditorKey::*;
 
-        let row_idx = if self.cursor.y as usize >= self.rows.len() {
-            None
-        } else {
-            Some(self.cursor.y as usize)
-        };
-
         match key {
             Left => {
-                self.cursor.x = self.cursor.x.saturating_sub(1);
+                if self.cursor.x != 0 {
+                    self.cursor.x -= 1;
+                } else if self.cursor.y > 0 {
+                    self.cursor.y -= 1;
+                    self.cursor.x = self.rows[self.cursor.y as usize].len() as u16;
+                }
             }
             Right => {
-                if let Some(idx) = row_idx {
+                if self.cursor.y as usize >= self.rows.len() {
+                    let idx = self.cursor.y as usize;
                     if (self.rows[idx].len() as u16) > self.cursor.x {
                         self.cursor.x += 1;
                     }
