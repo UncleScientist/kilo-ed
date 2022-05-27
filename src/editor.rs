@@ -145,14 +145,17 @@ impl Editor {
                     self.cursor.x -= 1;
                 } else if self.cursor.y > 0 {
                     self.cursor.y -= 1;
-                    self.cursor.x = self.rows[self.cursor.y as usize].len() as u16;
+                    self.cursor.x = self.rows[self.cursor.row()].len() as u16;
                 }
             }
             Right => {
-                if self.cursor.y as usize >= self.rows.len() {
-                    let idx = self.cursor.y as usize;
-                    if (self.rows[idx].len() as u16) > self.cursor.x {
+                if (self.cursor.y as usize) < self.rows.len() {
+                    let idx = self.cursor.row();
+                    if self.cursor.left_of(self.rows[idx].len()) {
                         self.cursor.x += 1;
+                    } else if self.cursor.above(self.rows.len()) {
+                        self.cursor.y += 1;
+                        self.cursor.x = 0;
                     }
                 }
             }
