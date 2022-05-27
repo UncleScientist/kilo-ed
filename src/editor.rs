@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::{terminal, Result};
@@ -21,6 +22,8 @@ enum EditorKey {
 
 pub struct Editor {
     filename: String,
+    status_msg: String,
+    status_time: Instant,
     screen: Screen,
     keyboard: Keyboard,
     cursor: Position,
@@ -54,6 +57,8 @@ impl Editor {
         keymap.insert('d', EditorKey::Right);
         Ok(Self {
             filename: filename.into(),
+            status_msg: String::from("HELP: Ctrl-Q = quit"),
+            status_time: Instant::now(),
             screen: Screen::new()?,
             keyboard: Keyboard {},
             cursor: Position::default(),
@@ -149,9 +154,13 @@ impl Editor {
         self.screen.clear()?;
         self.screen
             .draw_rows(&self.rows, self.rowoff, self.coloff)?;
+        if !self.status_msg.is_empty() && self.status_time.elapsed() > Duration::from_secs(5) {
+            self.status_msg.clear();
+        }
         self.screen.draw_status_bar(
             format!("{:20} - {} lines", self.filename, self.rows.len()),
             format!("{}/{}", self.cursor.y, self.rows.len()),
+            &self.status_msg,
         )
     }
 
@@ -227,4 +236,11 @@ impl Editor {
             0
         }
     }
+
+    /*
+    fn set_status_message<T: Into<String>>(&mut self, message: T) {
+        self.status_time = Instant::now();
+        self.status_msg = message.into();
+    }
+    */
 }
