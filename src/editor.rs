@@ -89,7 +89,7 @@ impl Editor {
                 },
                 KeyEvent { code, .. } => match code {
                     KeyCode::Home => self.cursor.x = 0,
-                    KeyCode::End => self.cursor.x = self.screen.bounds().x - 1,
+                    KeyCode::End => self.cursor.x = self.current_row_len(),
                     KeyCode::Up => self.move_cursor(EditorKey::Up),
                     KeyCode::Down => self.move_cursor(EditorKey::Down),
                     KeyCode::Left => self.move_cursor(EditorKey::Left),
@@ -183,11 +183,7 @@ impl Editor {
             _ => {}
         }
 
-        let rowlen = if self.cursor.above(self.rows.len()) {
-            self.rows[self.cursor.y as usize].len() as u16
-        } else {
-            0
-        };
+        let rowlen = self.current_row_len();
         self.cursor.x = self.cursor.x.min(rowlen);
     }
 
@@ -212,6 +208,14 @@ impl Editor {
 
         if self.render_x >= self.coloff + bounds.x {
             self.coloff = self.render_x - bounds.x + 1;
+        }
+    }
+
+    fn current_row_len(&self) -> u16 {
+        if self.cursor.above(self.rows.len()) {
+            self.rows[self.cursor.y as usize].len() as u16
+        } else {
+            0
         }
     }
 }
