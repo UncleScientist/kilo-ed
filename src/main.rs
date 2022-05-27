@@ -1,6 +1,7 @@
 use crossterm::Result;
 
 mod keyboard;
+mod row;
 mod screen;
 
 mod editor;

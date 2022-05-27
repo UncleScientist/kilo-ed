@@ -8,6 +8,7 @@ use errno::errno;
 use kilo_ed::*;
 
 use crate::keyboard::*;
+use crate::row::*;
 use crate::screen::*;
 
 #[derive(Copy, Clone)]
@@ -19,6 +20,7 @@ enum EditorKey {
 }
 
 pub struct Editor {
+    filename: String,
     screen: Screen,
     keyboard: Keyboard,
     cursor: Position,
@@ -30,26 +32,28 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn with_file<P: AsRef<Path>>(filename: P) -> Result<Self> {
+    pub fn with_file<P: AsRef<Path> + ToString>(filename: P) -> Result<Self> {
+        let fn_string = filename.to_string();
         let lines = std::fs::read_to_string(filename)
             .expect("Unable to open file")
             .split('\n')
             .map(|x| x.into())
             .collect::<Vec<String>>();
-        Editor::build(&lines)
+        Editor::build(&lines, fn_string)
     }
 
     pub fn new() -> Result<Self> {
-        Editor::build(&[])
+        Editor::build(&[], "")
     }
 
-    fn build(data: &[String]) -> Result<Self> {
+    fn build<T: Into<String>>(data: &[String], filename: T) -> Result<Self> {
         let mut keymap = HashMap::new();
         keymap.insert('w', EditorKey::Up);
         keymap.insert('s', EditorKey::Down);
         keymap.insert('a', EditorKey::Left);
         keymap.insert('d', EditorKey::Right);
         Ok(Self {
+            filename: filename.into(),
             screen: Screen::new()?,
             keyboard: Keyboard {},
             cursor: Position::default(),
@@ -143,7 +147,12 @@ impl Editor {
     pub fn refresh_screen(&mut self) -> Result<()> {
         self.scroll();
         self.screen.clear()?;
-        self.screen.draw_rows(&self.rows, self.rowoff, self.coloff)
+        self.screen
+            .draw_rows(&self.rows, self.rowoff, self.coloff)?;
+        self.screen.draw_status_bar(
+            format!("{:20} - {} lines", self.filename, self.rows.len()),
+            format!("{}/{}", self.cursor.y, self.rows.len()),
+        )
     }
 
     pub fn die<S: Into<String>>(&mut self, message: S) {
