@@ -30,6 +30,7 @@ pub struct Editor {
     rows: Vec<Row>,
     rowoff: u16,
     coloff: u16,
+    dirty: usize,
 }
 
 impl Editor {
@@ -71,6 +72,7 @@ impl Editor {
             rowoff: 0,
             coloff: 0,
             render_x: 0,
+            dirty: 0,
         })
     }
 
@@ -196,7 +198,16 @@ impl Editor {
             self.status_msg.clear();
         }
         self.screen.draw_status_bar(
-            format!("{:20} - {} lines", self.filename, self.rows.len()),
+            format!(
+                "{:20} - {} lines {}",
+                if self.filename.is_empty() {
+                    "[No Name]"
+                } else {
+                    &self.filename
+                },
+                self.rows.len(),
+                if self.dirty > 0 { "(modified)" } else { "" }
+            ),
             format!("{}/{}", self.cursor.y, self.rows.len()),
             &self.status_msg,
         )
@@ -277,10 +288,16 @@ impl Editor {
 
     fn insert_char(&mut self, c: char) {
         if !self.cursor.above(self.rows.len()) {
-            self.rows.push(Row::new(String::new()));
+            self.append_row(String::new());
         }
         self.rows[self.cursor.y as usize].insert_char(self.cursor.x as usize, c);
         self.cursor.x += 1;
+        self.dirty += 1;
+    }
+
+    fn append_row(&mut self, s: String) {
+        self.rows.push(Row::new(s));
+        self.dirty += 1;
     }
 
     fn rows_to_string(&self) -> String {
@@ -301,6 +318,7 @@ impl Editor {
         let buf = self.rows_to_string();
         let len = buf.as_bytes().len();
         if std::fs::write(&self.filename, &buf).is_ok() {
+            self.dirty = 0;
             self.set_status_message(&format!("{len} bytes written to disk"));
         } else {
             self.set_status_message(&format!("Can't save! I/O error: {}", errno()));
