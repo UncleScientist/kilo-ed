@@ -77,15 +77,54 @@ impl Editor {
     pub fn process_keypress(&mut self) -> Result<bool> {
         if let Ok(c) = self.keyboard.read() {
             match c {
+                /*
+                 * Ctrl-Q to quit
+                 */
                 KeyEvent {
                     code: KeyCode::Char('q'),
                     modifiers: KeyModifiers::CONTROL,
                 } => return Ok(true),
+
+                /*
+                 * Ignore Ctrl-L and Escape keys
+                 */
+                KeyEvent {
+                    code: KeyCode::Char('l'),
+                    modifiers: KeyModifiers::CONTROL,
+                }
+                | KeyEvent {
+                    code: KeyCode::Esc, ..
+                } => {}
+
+                /*
+                 * Ctrl-h or Backspace or Delete to delete characters
+                 */
+                KeyEvent {
+                    code: KeyCode::Char('h'),
+                    modifiers: KeyModifiers::CONTROL,
+                }
+                | KeyEvent {
+                    code: KeyCode::Backspace,
+                    ..
+                }
+                | KeyEvent {
+                    code: KeyCode::Delete,
+                    ..
+                } => {} // TODO
+
+                /*
+                 * Any 'regular' key gets inserted
+                 */
                 KeyEvent {
                     code: KeyCode::Char(key),
-                    ..
+                    modifiers: KeyModifiers::NONE,
                 } => self.insert_char(key),
+
+                /*
+                 * Handle all other special keycodes
+                 */
                 KeyEvent { code, .. } => match code {
+                    KeyCode::Enter => {} // TODO
                     KeyCode::Home => self.cursor.x = 0,
                     KeyCode::End => self.cursor.x = self.current_row_len(),
                     KeyCode::Up => self.move_cursor(EditorKey::Up),
