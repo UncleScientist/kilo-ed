@@ -50,6 +50,11 @@ impl Row {
         }
     }
 
+    pub fn append_string(&mut self, s: &str) {
+        self.chars.push_str(s);
+        self.render = Row::render_row(&self.chars);
+    }
+
     fn render_row(chars: &str) -> String {
         let mut render = String::new();
         let mut idx = 0;
