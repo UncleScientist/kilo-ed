@@ -86,6 +86,16 @@ impl Editor {
                 } => return Ok(true),
 
                 /*
+                 * Ctrl-S to save
+                 */
+                KeyEvent {
+                    code: KeyCode::Char('s'),
+                    modifiers: KeyModifiers::CONTROL,
+                } => {
+                    self.save();
+                }
+
+                /*
                  * Ignore Ctrl-L and Escape keys
                  */
                 KeyEvent {
@@ -271,6 +281,25 @@ impl Editor {
         }
         self.rows[self.cursor.y as usize].insert_char(self.cursor.x as usize, c);
         self.cursor.x += 1;
+    }
+
+    fn rows_to_string(&self) -> String {
+        let mut buf = String::new();
+        for r in &self.rows {
+            buf.push_str(r.chars.as_str());
+            buf.push('\n');
+        }
+
+        buf
+    }
+
+    fn save(&self) {
+        if self.filename.is_empty() {
+            return;
+        }
+
+        let buf = self.rows_to_string();
+        let _ = std::fs::write(&self.filename, &buf);
     }
 
     /*
