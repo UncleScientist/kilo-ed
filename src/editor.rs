@@ -138,7 +138,16 @@ impl Editor {
                 | KeyEvent {
                     code: KeyCode::Delete,
                     ..
-                } => {} // TODO
+                } => {
+                    if let KeyEvent {
+                        code: KeyCode::Delete,
+                        ..
+                    } = c
+                    {
+                        self.move_cursor(EditorKey::Right);
+                    }
+                    self.del_char();
+                }
 
                 /*
                  * Any 'regular' key gets inserted
@@ -310,6 +319,19 @@ impl Editor {
         self.rows[self.cursor.y as usize].insert_char(self.cursor.x as usize, c);
         self.cursor.x += 1;
         self.dirty += 1;
+    }
+
+    fn del_char(&mut self) {
+        if !self.cursor.above(self.rows.len()) {
+            return;
+        }
+
+        if self.cursor.x > 0
+            && self.rows[self.cursor.y as usize].del_char(self.cursor.x as usize - 1)
+        {
+            self.dirty += 1;
+            self.cursor.x -= 1;
+        }
     }
 
     fn append_row(&mut self, s: String) {
