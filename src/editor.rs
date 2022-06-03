@@ -50,7 +50,7 @@ impl Editor {
     fn build<T: Into<String>>(data: &[String], filename: T) -> Result<Self> {
         Ok(Self {
             filename: filename.into(),
-            status_msg: String::from("HELP: Ctrl-Q = quit"),
+            status_msg: String::from("HELP: Ctrl-S = save | Ctrl-Q = quit"),
             status_time: Instant::now(),
             screen: Screen::new()?,
             keyboard: Keyboard {},
@@ -293,19 +293,22 @@ impl Editor {
         buf
     }
 
-    fn save(&self) {
+    fn save(&mut self) {
         if self.filename.is_empty() {
             return;
         }
 
         let buf = self.rows_to_string();
-        let _ = std::fs::write(&self.filename, &buf);
+        let len = buf.as_bytes().len();
+        if std::fs::write(&self.filename, &buf).is_ok() {
+            self.set_status_message(&format!("{len} bytes written to disk"));
+        } else {
+            self.set_status_message(&format!("Can't save! I/O error: {}", errno()));
+        }
     }
 
-    /*
     fn set_status_message<T: Into<String>>(&mut self, message: T) {
         self.status_time = Instant::now();
         self.status_msg = message.into();
     }
-    */
 }
