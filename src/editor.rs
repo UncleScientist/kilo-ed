@@ -11,6 +11,8 @@ use crate::keyboard::*;
 use crate::row::*;
 use crate::screen::*;
 
+const KILO_QUIT_TIMES: usize = 3;
+
 #[derive(Copy, Clone)]
 enum EditorKey {
     Left,
@@ -31,6 +33,7 @@ pub struct Editor {
     rowoff: u16,
     coloff: u16,
     dirty: usize,
+    quit_times: usize,
 }
 
 impl Editor {
@@ -73,6 +76,7 @@ impl Editor {
             coloff: 0,
             render_x: 0,
             dirty: 0,
+            quit_times: KILO_QUIT_TIMES,
         })
     }
 
@@ -85,7 +89,19 @@ impl Editor {
                 KeyEvent {
                     code: KeyCode::Char('q'),
                     modifiers: KeyModifiers::CONTROL,
-                } => return Ok(true),
+                } => {
+                    if self.dirty > 0 && self.quit_times > 0 {
+                        self.set_status_message(format!(
+                            "WARNING!!! File has unsaved changes. \
+                                Press Ctrl-Q {} more times to quit.",
+                            self.quit_times
+                        ));
+                        self.quit_times -= 1;
+                        return Ok(false);
+                    } else {
+                        return Ok(true);
+                    }
+                }
 
                 /*
                  * Ctrl-S to save
@@ -169,6 +185,7 @@ impl Editor {
         } else {
             self.die("Unable to read from keyboard");
         }
+        self.quit_times = KILO_QUIT_TIMES;
         Ok(false)
     }
 
