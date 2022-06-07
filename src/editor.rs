@@ -165,7 +165,9 @@ impl Editor {
                  * Handle all other special keycodes
                  */
                 KeyEvent { code, .. } => match code {
-                    KeyCode::Enter => {} // TODO
+                    KeyCode::Enter => {
+                        self.insert_newline();
+                    }
                     KeyCode::Home => self.cursor.x = 0,
                     KeyCode::End => self.cursor.x = self.current_row_len(),
                     KeyCode::Up => self.move_cursor(EditorKey::Up),
@@ -348,6 +350,19 @@ impl Editor {
                 self.dirty += 1;
             }
         }
+    }
+
+    fn insert_newline(&mut self) {
+        let row = self.cursor.y as usize;
+
+        if self.cursor.x == 0 {
+            self.insert_row(row, String::from(""));
+        } else {
+            let new_row = self.rows[row].split(self.cursor.x as usize);
+            self.insert_row(row + 1, new_row);
+        }
+        self.cursor.y += 1;
+        self.cursor.x = 0;
     }
 
     fn insert_row(&mut self, at: usize, s: String) {

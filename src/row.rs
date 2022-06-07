@@ -50,6 +50,13 @@ impl Row {
         }
     }
 
+    pub fn split(&mut self, at: usize) -> String {
+        let result = self.chars.split_off(at);
+        self.render = Row::render_row(&self.chars);
+
+        result
+    }
+
     pub fn append_string(&mut self, s: &str) {
         self.chars.push_str(s);
         self.render = Row::render_row(&self.chars);
