@@ -516,7 +516,16 @@ impl Editor {
     }
 
     fn find(&mut self) {
-        self.prompt("Search (ESC to cancel)", Some(Editor::find_callback));
+        let (saved_position, saved_coloff, saved_rowoff) = (self.cursor, self.coloff, self.rowoff);
+
+        if self
+            .prompt("Search (ESC to cancel)", Some(Editor::find_callback))
+            .is_none()
+        {
+            self.cursor = saved_position;
+            self.coloff = saved_coloff;
+            self.rowoff = saved_rowoff;
+        }
     }
 
     fn set_status_message<T: Into<String>>(&mut self, message: T) {
