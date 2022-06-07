@@ -318,7 +318,7 @@ impl Editor {
 
     fn insert_char(&mut self, c: char) {
         if !self.cursor.above(self.rows.len()) {
-            self.append_row(String::new());
+            self.insert_row(self.rows.len(), String::new());
         }
         self.rows[self.cursor.y as usize].insert_char(self.cursor.x as usize, c);
         self.cursor.x += 1;
@@ -350,8 +350,12 @@ impl Editor {
         }
     }
 
-    fn append_row(&mut self, s: String) {
-        self.rows.push(Row::new(s));
+    fn insert_row(&mut self, at: usize, s: String) {
+        if at > self.rows.len() {
+            return;
+        }
+
+        self.rows.insert(at, Row::new(s));
         self.dirty += 1;
     }
 
