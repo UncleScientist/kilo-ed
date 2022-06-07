@@ -54,7 +54,7 @@ impl Editor {
     fn build<T: Into<String>>(data: &[String], filename: T) -> Result<Self> {
         Ok(Self {
             filename: filename.into(),
-            status_msg: String::from("HELP: Ctrl-S = save | Ctrl-Q = quit"),
+            status_msg: String::from("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find"),
             status_time: Instant::now(),
             screen: Screen::new()?,
             keyboard: Keyboard {},
@@ -111,6 +111,16 @@ impl Editor {
                     modifiers: KeyModifiers::CONTROL,
                 } => {
                     self.save();
+                }
+
+                /*
+                 * Ctrl-F to find
+                 */
+                KeyEvent {
+                    code: KeyCode::Char('f'),
+                    modifiers: KeyModifiers::CONTROL,
+                } => {
+                    self.find();
                 }
 
                 /*
@@ -395,7 +405,7 @@ impl Editor {
 
     fn save(&mut self) {
         if self.filename.is_empty() {
-            if let Some(filename) = self.editor_prompt("Save as") {
+            if let Some(filename) = self.prompt("Save as") {
                 self.filename = filename;
             } else {
                 self.set_status_message("Save aborted");
@@ -413,7 +423,7 @@ impl Editor {
         }
     }
 
-    fn editor_prompt(&mut self, prompt: &str) -> Option<String> {
+    fn prompt(&mut self, prompt: &str) -> Option<String> {
         let mut buf = String::from("");
 
         loop {
@@ -462,6 +472,19 @@ impl Editor {
                         }
                     }
                     _ => {}
+                }
+            }
+        }
+    }
+
+    fn find(&mut self) {
+        if let Some(query) = self.prompt("Search (ESC to cancel)") {
+            for (i, row) in self.rows.iter().enumerate() {
+                if let Some(m) = row.render.match_indices(query.as_str()).take(1).next() {
+                    self.cursor.y = i as u16;
+                    self.cursor.x = row.rx_to_cx(m.0);
+                    self.rowoff = self.rows.len() as u16;
+                    break;
                 }
             }
         }

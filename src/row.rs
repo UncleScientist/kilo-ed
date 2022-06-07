@@ -30,6 +30,20 @@ impl Row {
         rx as u16
     }
 
+    pub fn rx_to_cx(&self, rx: usize) -> u16 {
+        let mut cur_rx = 0;
+        for (cx, c) in self.chars.chars().enumerate() {
+            if c == '\t' {
+                cur_rx += (KILO_TAB_STOP - 1) - (cur_rx % KILO_TAB_STOP);
+            }
+            cur_rx += 1;
+            if cur_rx > rx {
+                return cx as u16;
+            }
+        }
+        self.chars.len() as u16
+    }
+
     pub fn insert_char(&mut self, at: usize, c: char) {
         if at >= self.chars.len() {
             self.chars.push(c);
