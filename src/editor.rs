@@ -15,6 +15,8 @@ enum PromptKey {
     Enter,
     Escape,
     Char(char),
+    Next,
+    Prev,
 }
 
 const KILO_QUIT_TIMES: usize = 3;
@@ -25,6 +27,11 @@ enum EditorKey {
     Right,
     Up,
     Down,
+}
+
+enum SearchDirection {
+    Backward,
+    Forward,
 }
 
 pub struct Editor {
@@ -40,6 +47,8 @@ pub struct Editor {
     coloff: u16,
     dirty: usize,
     quit_times: usize,
+    last_match: Option<usize>,
+    direction: SearchDirection,
 }
 
 impl Editor {
@@ -83,6 +92,8 @@ impl Editor {
             render_x: 0,
             dirty: 0,
             quit_times: KILO_QUIT_TIMES,
+            last_match: None,
+            direction: SearchDirection::Forward,
         })
     }
 
@@ -481,6 +492,30 @@ impl Editor {
                     }
 
                     KeyEvent {
+                        code: KeyCode::Up, ..
+                    }
+                    | KeyEvent {
+                        code: KeyCode::Left,
+                        ..
+                    } => {
+                        if let Some(callback) = callback {
+                            callback(self, &buf, PromptKey::Prev);
+                        }
+                    }
+                    KeyEvent {
+                        code: KeyCode::Down,
+                        ..
+                    }
+                    | KeyEvent {
+                        code: KeyCode::Right,
+                        ..
+                    } => {
+                        if let Some(callback) = callback {
+                            callback(self, &buf, PromptKey::Next);
+                        }
+                    }
+
+                    KeyEvent {
                         code: KeyCode::Char(ch),
                         modifiers: modif,
                     } => {
@@ -501,14 +536,53 @@ impl Editor {
     }
 
     fn find_callback(&mut self, query: &str, event: PromptKey) {
-        if matches!(event, PromptKey::Enter | PromptKey::Escape) {
-            return;
+        match event {
+            PromptKey::Enter | PromptKey::Escape => {
+                self.last_match = None;
+                self.direction = SearchDirection::Forward;
+            }
+
+            PromptKey::Next => self.direction = SearchDirection::Forward,
+            PromptKey::Prev => self.direction = SearchDirection::Backward,
+            _ => {
+                self.last_match = None;
+                self.direction = SearchDirection::Forward;
+            }
         }
 
-        for (i, row) in self.rows.iter().enumerate() {
-            if let Some(m) = row.render.match_indices(query).take(1).next() {
-                self.cursor.y = i as u16;
-                self.cursor.x = row.rx_to_cx(m.0);
+        let mut current = if let Some(line) = self.last_match {
+            line
+        } else {
+            self.direction = SearchDirection::Forward;
+            self.rows.len()
+        };
+
+        for _ in 0..self.rows.len() {
+            match self.direction {
+                SearchDirection::Forward => {
+                    current += 1;
+                    if current >= self.rows.len() {
+                        current = 0;
+                    }
+                }
+                SearchDirection::Backward => {
+                    if current == 0 {
+                        current = self.rows.len() - 1;
+                    } else {
+                        current -= 1;
+                    }
+                }
+            }
+
+            if let Some(m) = self.rows[current]
+                .render
+                .match_indices(query)
+                .take(1)
+                .next()
+            {
+                self.last_match = Some(current);
+                self.cursor.y = current as u16;
+                self.cursor.x = self.rows[current].rx_to_cx(m.0);
                 self.rowoff = self.rows.len() as u16;
                 break;
             }
@@ -519,7 +593,7 @@ impl Editor {
         let (saved_position, saved_coloff, saved_rowoff) = (self.cursor, self.coloff, self.rowoff);
 
         if self
-            .prompt("Search (ESC to cancel)", Some(Editor::find_callback))
+            .prompt("Search (Use ESC/Arrows/Enter)", Some(Editor::find_callback))
             .is_none()
         {
             self.cursor = saved_position;
