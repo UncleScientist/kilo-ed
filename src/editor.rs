@@ -430,12 +430,29 @@ impl Editor {
                         self.set_status_message("");
                         return Some(buf);
                     }
+
                     KeyEvent {
                         code: KeyCode::Esc, ..
                     } => {
                         self.set_status_message("");
                         return None;
                     }
+
+                    KeyEvent {
+                        code: KeyCode::Char('h'),
+                        modifiers: KeyModifiers::CONTROL,
+                    }
+                    | KeyEvent {
+                        code: KeyCode::Backspace,
+                        ..
+                    }
+                    | KeyEvent {
+                        code: KeyCode::Delete,
+                        ..
+                    } => {
+                        buf.pop();
+                    }
+
                     KeyEvent {
                         code: KeyCode::Char(ch),
                         modifiers: modif,
