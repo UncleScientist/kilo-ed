@@ -11,6 +11,12 @@ use crate::keyboard::*;
 use crate::row::*;
 use crate::screen::*;
 
+enum PromptKey {
+    Enter,
+    Escape,
+    Char(char),
+}
+
 const KILO_QUIT_TIMES: usize = 3;
 
 #[derive(Copy, Clone)]
@@ -405,7 +411,7 @@ impl Editor {
 
     fn save(&mut self) {
         if self.filename.is_empty() {
-            if let Some(filename) = self.prompt("Save as") {
+            if let Some(filename) = self.prompt("Save as", None) {
                 self.filename = filename;
             } else {
                 self.set_status_message("Save aborted");
@@ -423,7 +429,11 @@ impl Editor {
         }
     }
 
-    fn prompt(&mut self, prompt: &str) -> Option<String> {
+    fn prompt(
+        &mut self,
+        prompt: &str,
+        callback: Option<fn(&mut Editor, &str, PromptKey)>,
+    ) -> Option<String> {
         let mut buf = String::from("");
 
         loop {
@@ -432,11 +442,15 @@ impl Editor {
 
             let _ = self.screen.flush();
             if let Ok(c) = self.keyboard.read() {
+                let mut prompt_key: Option<PromptKey> = None;
                 match c {
                     KeyEvent {
                         code: KeyCode::Enter,
                         ..
                     } => {
+                        if let Some(callback) = callback {
+                            callback(self, &buf, PromptKey::Enter);
+                        }
                         self.set_status_message("");
                         return Some(buf);
                     }
@@ -444,6 +458,9 @@ impl Editor {
                     KeyEvent {
                         code: KeyCode::Esc, ..
                     } => {
+                        if let Some(callback) = callback {
+                            callback(self, &buf, PromptKey::Escape);
+                        }
                         self.set_status_message("");
                         return None;
                     }
@@ -468,26 +485,38 @@ impl Editor {
                         modifiers: modif,
                     } => {
                         if matches!(modif, KeyModifiers::NONE | KeyModifiers::SHIFT) {
+                            prompt_key = Some(PromptKey::Char(ch));
                             buf.push(ch);
                         }
                     }
                     _ => {}
                 }
+                if let Some(callback) = callback {
+                    if let Some(key) = prompt_key {
+                        callback(self, &buf, key);
+                    }
+                }
+            }
+        }
+    }
+
+    fn find_callback(&mut self, query: &str, event: PromptKey) {
+        if matches!(event, PromptKey::Enter | PromptKey::Escape) {
+            return;
+        }
+
+        for (i, row) in self.rows.iter().enumerate() {
+            if let Some(m) = row.render.match_indices(query).take(1).next() {
+                self.cursor.y = i as u16;
+                self.cursor.x = row.rx_to_cx(m.0);
+                self.rowoff = self.rows.len() as u16;
+                break;
             }
         }
     }
 
     fn find(&mut self) {
-        if let Some(query) = self.prompt("Search (ESC to cancel)") {
-            for (i, row) in self.rows.iter().enumerate() {
-                if let Some(m) = row.render.match_indices(query.as_str()).take(1).next() {
-                    self.cursor.y = i as u16;
-                    self.cursor.x = row.rx_to_cx(m.0);
-                    self.rowoff = self.rows.len() as u16;
-                    break;
-                }
-            }
-        }
+        self.prompt("Search (ESC to cancel)", Some(Editor::find_callback));
     }
 
     fn set_status_message<T: Into<String>>(&mut self, message: T) {
