@@ -3,7 +3,7 @@ use std::io::{stdout, Stdout, Write};
 
 use crossterm::{
     cursor,
-    style::{Color, Colors, Print, ResetColor, SetColors},
+    style::{Color, Colors, Print, ResetColor, SetColors, SetForegroundColor},
     terminal, QueueableCommand, Result,
 };
 
@@ -66,9 +66,24 @@ impl Screen {
                         len
                     };
 
-                self.stdout
-                    .queue(cursor::MoveTo(0, row))?
-                    .queue(Print(rows[filerow].render[start..end].to_string()))?;
+                self.stdout.queue(cursor::MoveTo(0, row))?;
+                let mut hl_iter = rows[filerow].hl[start..end].iter();
+                let mut hl = hl_iter.next();
+                for c in rows[filerow].render[start..end].to_string().chars() {
+                    let highlight = *hl.unwrap();
+                    if highlight == Highlight::Normal {
+                        self.stdout
+                            .queue(SetForegroundColor(Color::Reset))?
+                            .queue(Print(c))?;
+                    } else {
+                        let color = highlight.syntax_to_color();
+                        self.stdout
+                            .queue(SetForegroundColor(color))?
+                            .queue(Print(c))?
+                            .queue(SetForegroundColor(Color::Reset))?;
+                    }
+                    hl = hl_iter.next();
+                }
             }
         }
         Ok(())
