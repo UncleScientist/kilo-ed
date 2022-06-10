@@ -67,23 +67,27 @@ impl Screen {
                     };
 
                 self.stdout.queue(cursor::MoveTo(0, row))?;
-                let mut hl_iter = rows[filerow].hl[start..end].iter();
+                let mut hl_iter = rows[filerow].iter_highlight(start, end);
                 let mut hl = hl_iter.next();
+                let mut current_color = Color::Reset;
                 for c in rows[filerow].render[start..end].to_string().chars() {
                     let highlight = *hl.unwrap();
-                    if highlight == Highlight::Normal {
-                        self.stdout
-                            .queue(SetForegroundColor(Color::Reset))?
-                            .queue(Print(c))?;
+                    if highlight.is_normal() {
+                        if current_color != Color::Reset {
+                            self.stdout.queue(SetForegroundColor(Color::Reset))?;
+                            current_color = Color::Reset;
+                        }
                     } else {
                         let color = highlight.syntax_to_color();
-                        self.stdout
-                            .queue(SetForegroundColor(color))?
-                            .queue(Print(c))?
-                            .queue(SetForegroundColor(Color::Reset))?;
+                        if color != current_color {
+                            self.stdout.queue(SetForegroundColor(color))?;
+                            current_color = color;
+                        }
                     }
+                    self.stdout.queue(Print(c))?;
                     hl = hl_iter.next();
                 }
+                self.stdout.queue(SetForegroundColor(Color::Reset))?;
             }
         }
         Ok(())

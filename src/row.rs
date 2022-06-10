@@ -6,6 +6,7 @@ const KILO_TAB_STOP: usize = 8;
 pub enum Highlight {
     Normal,
     Number,
+    Match,
 }
 
 impl Highlight {
@@ -13,14 +14,20 @@ impl Highlight {
         match self {
             Highlight::Normal => Color::White,
             Highlight::Number => Color::Red,
+            Highlight::Match => Color::Blue,
         }
+    }
+
+    pub fn is_normal(&self) -> bool {
+        self == &Highlight::Normal
     }
 }
 
 pub struct Row {
     pub chars: String,
     pub render: String,
-    pub hl: Vec<Highlight>,
+    hl: Vec<Highlight>,
+    saved_highlight: Vec<Highlight>,
 }
 
 impl Row {
@@ -29,6 +36,7 @@ impl Row {
             chars,
             render: String::new(),
             hl: Vec::new(),
+            saved_highlight: Vec::new(),
         };
 
         result.render_row();
@@ -127,10 +135,68 @@ impl Row {
     fn update_syntax(&mut self) {
         self.hl = vec![Highlight::Normal; self.render.len()];
 
-        for (i, c) in self.render.chars().enumerate() {
-            if c.is_digit(10) {
+        let mut prev_sep = true;
+        let row_iter = self.render.chars().enumerate();
+        for (i, c) in row_iter {
+            let prev_hl = if i > 0 {
+                self.hl[i - 1]
+            } else {
+                Highlight::Normal
+            };
+            if (c.is_digit(10) && (prev_sep || prev_hl == Highlight::Number))
+                || (c == '.' && prev_hl == Highlight::Number)
+            {
                 self.hl[i] = Highlight::Number;
+                prev_sep = false;
+                continue;
             }
+            prev_sep = c.is_separator();
         }
+    }
+
+    pub fn iter_highlight(&self, start: usize, end: usize) -> std::slice::Iter<Highlight> {
+        self.hl[start..end].iter()
+    }
+
+    pub fn highlight_match(&mut self, start: usize, len: usize) {
+        self.saved_highlight = self.hl.clone();
+        for c in self.hl[start..start + len].iter_mut() {
+            *c = Highlight::Match;
+        }
+    }
+
+    pub fn reset_match(&mut self) {
+        self.hl = self.saved_highlight.clone();
+        self.saved_highlight.clear();
+    }
+}
+
+// -----
+
+trait Separator {
+    fn is_separator(&self) -> bool;
+}
+
+impl Separator for char {
+    fn is_separator(&self) -> bool {
+        matches!(
+            self,
+            ' ' | ','
+                | '.'
+                | '('
+                | ')'
+                | '+'
+                | '-'
+                | '/'
+                | '*'
+                | '='
+                | '~'
+                | '%'
+                | '<'
+                | '>'
+                | '['
+                | ']'
+                | ';'
+        )
     }
 }

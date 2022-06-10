@@ -49,6 +49,7 @@ pub struct Editor {
     quit_times: usize,
     last_match: Option<usize>,
     direction: SearchDirection,
+    saved_hl: Option<usize>,
 }
 
 impl Editor {
@@ -94,6 +95,7 @@ impl Editor {
             quit_times: KILO_QUIT_TIMES,
             last_match: None,
             direction: SearchDirection::Forward,
+            saved_hl: None,
         })
     }
 
@@ -536,10 +538,16 @@ impl Editor {
     }
 
     fn find_callback(&mut self, query: &str, event: PromptKey) {
+        if let Some(saved_hl) = self.saved_hl {
+            self.rows[saved_hl].reset_match();
+            self.saved_hl = None;
+        }
+
         match event {
             PromptKey::Enter | PromptKey::Escape => {
                 self.last_match = None;
                 self.direction = SearchDirection::Forward;
+                return;
             }
 
             PromptKey::Next => self.direction = SearchDirection::Forward,
@@ -580,10 +588,15 @@ impl Editor {
                 .take(1)
                 .next()
             {
+                let start = m.0;
+
                 self.last_match = Some(current);
                 self.cursor.y = current as u16;
-                self.cursor.x = self.rows[current].rx_to_cx(m.0);
+                self.cursor.x = self.rows[current].rx_to_cx(start);
                 self.rowoff = self.rows.len() as u16;
+
+                self.rows[current].highlight_match(start, query.len());
+                self.saved_hl = Some(current);
                 break;
             }
         }
