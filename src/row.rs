@@ -8,6 +8,8 @@ pub enum Highlight {
     Normal,
     Number,
     Match,
+    String,
+    Comment,
 }
 
 impl Highlight {
@@ -16,6 +18,8 @@ impl Highlight {
             Highlight::Normal => Color::White,
             Highlight::Number => Color::Red,
             Highlight::Match => Color::Blue,
+            Highlight::String => Color::Magenta,
+            Highlight::Comment => Color::Cyan,
         }
     }
 
@@ -141,13 +145,47 @@ impl Row {
         }
 
         let mut prev_sep = true;
-        let row_iter = self.render.chars().enumerate();
-        for (i, c) in row_iter {
+        let mut row_iter = self.render.chars().enumerate();
+        let mut in_string = None;
+
+        while let Some((i, c)) = row_iter.next() {
             let prev_hl = if i > 0 {
                 self.hl[i - 1]
             } else {
                 Highlight::Normal
             };
+
+            if in_string.is_none()
+                && c == '/'
+                && i < self.chars.len() - 1
+                && &self.chars[i..i + 2] == "//"
+            {
+                for j in i..self.chars.len() {
+                    self.hl[j] = Highlight::Comment;
+                }
+                break;
+            }
+
+            if flags & highlight::STRINGS != 0 {
+                if let Some(cur) = in_string {
+                    self.hl[i] = Highlight::String;
+                    if c == '\\' && i + 1 < self.chars.len() {
+                        self.hl[i + 1] = Highlight::String;
+                        row_iter.nth(1); // skip 1
+                        continue;
+                    }
+                    if c == cur {
+                        in_string = None;
+                    }
+                    prev_sep = true;
+                    continue;
+                } else if c == '"' || c == '\'' {
+                    in_string = Some(c);
+                    self.hl[i] = Highlight::String;
+                    continue;
+                }
+            }
+
             if (flags & highlight::NUMBERS) != 0
                 && ((c.is_digit(10) && (prev_sep || prev_hl == Highlight::Number))
                     || (c == '.' && prev_hl == Highlight::Number))
@@ -156,6 +194,7 @@ impl Row {
                 prev_sep = false;
                 continue;
             }
+
             prev_sep = c.is_separator();
         }
     }
