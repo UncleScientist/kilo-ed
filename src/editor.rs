@@ -7,6 +7,7 @@ use errno::errno;
 
 use kilo_ed::*;
 
+use crate::editor_syntax::*;
 use crate::keyboard::*;
 use crate::row::*;
 use crate::screen::*;
@@ -50,6 +51,8 @@ pub struct Editor {
     last_match: Option<usize>,
     direction: SearchDirection,
     saved_hl: Option<usize>,
+    hldb: Vec<EditorSyntax>,
+    syntax: Option<usize>, // index into hldb
 }
 
 impl Editor {
@@ -96,6 +99,8 @@ impl Editor {
             last_match: None,
             direction: SearchDirection::Forward,
             saved_hl: None,
+            hldb: EditorSyntax::new(),
+            syntax: None,
         })
     }
 
@@ -269,7 +274,16 @@ impl Editor {
                 self.rows.len(),
                 if self.dirty > 0 { "(modified)" } else { "" }
             ),
-            format!("{}/{}", self.cursor.y, self.rows.len()),
+            format!(
+                "{} | {}/{}",
+                if let Some(ft) = self.syntax {
+                    self.hldb[ft].filetype.as_str()
+                } else {
+                    "no ft"
+                },
+                self.cursor.y,
+                self.rows.len()
+            ),
             &self.status_msg,
         )
     }

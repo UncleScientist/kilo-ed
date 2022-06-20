@@ -1,5 +1,6 @@
 use crossterm::Result;
 
+mod editor_syntax;
 mod keyboard;
 mod row;
 mod screen;
