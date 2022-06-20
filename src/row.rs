@@ -1,3 +1,4 @@
+use crate::editor_syntax::*;
 use crossterm::style::Color;
 
 const KILO_TAB_STOP: usize = 8;
@@ -31,7 +32,7 @@ pub struct Row {
 }
 
 impl Row {
-    pub fn new(chars: String) -> Self {
+    pub fn new(chars: String, flags: EditorFlags) -> Self {
         let mut result = Self {
             chars,
             render: String::new(),
@@ -39,7 +40,7 @@ impl Row {
             saved_highlight: Vec::new(),
         };
 
-        result.render_row();
+        result.render_row(flags);
         result
     }
 
@@ -76,39 +77,39 @@ impl Row {
         self.chars.len() as u16
     }
 
-    pub fn insert_char(&mut self, at: usize, c: char) {
+    pub fn insert_char(&mut self, at: usize, c: char, flags: EditorFlags) {
         if at >= self.chars.len() {
             self.chars.push(c);
         } else {
             self.chars.insert(at, c);
         }
-        self.render_row();
+        self.render_row(flags);
     }
 
     /* returns true if row was modified, false otherwise */
-    pub fn del_char(&mut self, at: usize) -> bool {
+    pub fn del_char(&mut self, at: usize, flags: EditorFlags) -> bool {
         if at >= self.chars.len() {
             false
         } else {
             self.chars.remove(at);
-            self.render_row();
+            self.render_row(flags);
             true
         }
     }
 
-    pub fn split(&mut self, at: usize) -> String {
+    pub fn split(&mut self, at: usize, flags: EditorFlags) -> String {
         let result = self.chars.split_off(at);
-        self.render_row();
+        self.render_row(flags);
 
         result
     }
 
-    pub fn append_string(&mut self, s: &str) {
+    pub fn append_string(&mut self, s: &str, flags: EditorFlags) {
         self.chars.push_str(s);
-        self.render_row();
+        self.render_row(flags);
     }
 
-    fn render_row(&mut self) {
+    fn render_row(&mut self, flags: EditorFlags) {
         let mut render = String::new();
         let mut idx = 0;
         for c in self.chars.chars() {
@@ -129,11 +130,15 @@ impl Row {
         }
 
         self.render = render;
-        self.update_syntax();
+        self.update_syntax(flags);
     }
 
-    fn update_syntax(&mut self) {
+    pub fn update_syntax(&mut self, flags: EditorFlags) {
         self.hl = vec![Highlight::Normal; self.render.len()];
+
+        if flags == 0 {
+            return;
+        }
 
         let mut prev_sep = true;
         let row_iter = self.render.chars().enumerate();
@@ -143,8 +148,9 @@ impl Row {
             } else {
                 Highlight::Normal
             };
-            if (c.is_digit(10) && (prev_sep || prev_hl == Highlight::Number))
-                || (c == '.' && prev_hl == Highlight::Number)
+            if (flags & highlight::NUMBERS) != 0
+                && ((c.is_digit(10) && (prev_sep || prev_hl == Highlight::Number))
+                    || (c == '.' && prev_hl == Highlight::Number))
             {
                 self.hl[i] = Highlight::Number;
                 prev_sep = false;
