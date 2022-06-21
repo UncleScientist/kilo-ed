@@ -7,6 +7,7 @@ pub mod highlight {
     pub const STRINGS: EditorFlags = 1 << 1;
 }
 
+#[derive(Clone)]
 pub struct EditorSyntax {
     pub filetype: String,
     pub filematch: Vec<String>,

@@ -74,11 +74,7 @@ impl Editor {
         let filename: String = filename.into();
         let hldb = EditorSyntax::new();
         let syntax = Editor::find_highlight(&hldb, filename.as_str());
-        let flags = if let Some(idx) = syntax {
-            hldb[idx].flags
-        } else {
-            0
-        };
+        let syntax_data = syntax.map(|idx| hldb[idx].clone());
 
         Ok(Self {
             filename,
@@ -93,7 +89,7 @@ impl Editor {
                 let v = Vec::from(data);
                 let mut rows = Vec::new();
                 for row in v {
-                    rows.push(Row::new(row, flags))
+                    rows.push(Row::new(row, &syntax_data))
                 }
                 if rows.last().unwrap().len() == 0 {
                     rows.pop();
@@ -371,15 +367,11 @@ impl Editor {
     }
 
     fn insert_char(&mut self, c: char) {
-        let flags = if let Some(idx) = self.syntax {
-            self.hldb[idx].flags
-        } else {
-            0
-        };
+        let syntax_data = self.get_syntax_data();
         if !self.cursor.above(self.rows.len()) {
             self.insert_row(self.rows.len(), String::new());
         }
-        self.rows[self.cursor.y as usize].insert_char(self.cursor.x as usize, c, flags);
+        self.rows[self.cursor.y as usize].insert_char(self.cursor.x as usize, c, &syntax_data);
         self.cursor.x += 1;
         self.dirty += 1;
     }
@@ -393,21 +385,17 @@ impl Editor {
         }
 
         let cur_row = self.cursor.y as usize;
-        let flags = if let Some(idx) = self.syntax {
-            self.hldb[idx].flags
-        } else {
-            0
-        };
+        let syntax_data = self.get_syntax_data();
 
         if self.cursor.x > 0 {
-            if self.rows[cur_row].del_char(self.cursor.x as usize - 1, flags) {
+            if self.rows[cur_row].del_char(self.cursor.x as usize - 1, &syntax_data) {
                 self.dirty += 1;
                 self.cursor.x -= 1;
             }
         } else {
             self.cursor.x = self.rows[cur_row - 1].len() as u16;
             if let Some(row) = self.del_row(cur_row) {
-                self.rows[cur_row - 1].append_string(&row, flags);
+                self.rows[cur_row - 1].append_string(&row, &syntax_data);
                 self.cursor.y -= 1;
                 self.dirty += 1;
             }
@@ -415,17 +403,13 @@ impl Editor {
     }
 
     fn insert_newline(&mut self) {
-        let flags = if let Some(idx) = self.syntax {
-            self.hldb[idx].flags
-        } else {
-            0
-        };
+        let syntax_data = self.get_syntax_data();
         let row = self.cursor.y as usize;
 
         if self.cursor.x == 0 {
             self.insert_row(row, String::from(""));
         } else {
-            let new_row = self.rows[row].split(self.cursor.x as usize, flags);
+            let new_row = self.rows[row].split(self.cursor.x as usize, &syntax_data);
             self.insert_row(row + 1, new_row);
         }
         self.cursor.y += 1;
@@ -433,16 +417,12 @@ impl Editor {
     }
 
     fn insert_row(&mut self, at: usize, s: String) {
-        let flags = if let Some(idx) = self.syntax {
-            self.hldb[idx].flags
-        } else {
-            0
-        };
+        let syntax_data = self.get_syntax_data();
         if at > self.rows.len() {
             return;
         }
 
-        self.rows.insert(at, Row::new(s, flags));
+        self.rows.insert(at, Row::new(s, &syntax_data));
         self.dirty += 1;
     }
 
@@ -664,18 +644,18 @@ impl Editor {
         self.status_msg = message.into();
     }
 
+    fn get_syntax_data(&self) -> Option<EditorSyntax> {
+        self.syntax.map(|idx| self.hldb[idx].clone())
+    }
+
     fn select_syntax_highlight(&mut self) {
         let old_syntax = self.syntax;
         self.syntax = Editor::find_highlight(&self.hldb, &self.filename);
         if self.syntax != old_syntax {
-            let flags = if let Some(idx) = self.syntax {
-                self.hldb[idx].flags
-            } else {
-                0
-            };
+            let syntax_data = self.get_syntax_data();
 
             for r in self.rows.iter_mut() {
-                r.update_syntax(flags);
+                r.update_syntax(&syntax_data);
             }
         }
     }
