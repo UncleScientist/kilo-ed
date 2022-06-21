@@ -10,6 +10,8 @@ pub enum Highlight {
     Match,
     String,
     Comment,
+    Keyword1,
+    Keyword2,
 }
 
 impl Highlight {
@@ -20,6 +22,8 @@ impl Highlight {
             Highlight::Match => Color::Blue,
             Highlight::String => Color::Magenta,
             Highlight::Comment => Color::Cyan,
+            Highlight::Keyword1 => Color::Yellow,
+            Highlight::Keyword2 => Color::Green,
         }
     }
 
@@ -151,7 +155,7 @@ impl Row {
         let mut in_string = None;
         let scs = syntax.singleline_comment_start.as_ref();
 
-        while let Some((i, c)) = row_iter.next() {
+        'outer: while let Some((i, c)) = row_iter.next() {
             let prev_hl = if i > 0 {
                 self.hl[i - 1]
             } else {
@@ -162,8 +166,8 @@ impl Row {
                 if let Some(scs) = scs {
                     let len = scs.len();
 
-                    if self.chars.len() - i >= len && &self.chars[i..i + len] == scs {
-                        for j in i..self.chars.len() {
+                    if self.render.len() - i >= len && &self.render[i..i + len] == scs {
+                        for j in i..self.render.len() {
                             self.hl[j] = Highlight::Comment;
                         }
                         break;
@@ -174,7 +178,7 @@ impl Row {
             if syntax.flags & highlight::STRINGS != 0 {
                 if let Some(cur) = in_string {
                     self.hl[i] = Highlight::String;
-                    if c == '\\' && i + 1 < self.chars.len() {
+                    if c == '\\' && i + 1 < self.render.len() {
                         self.hl[i + 1] = Highlight::String;
                         row_iter.nth(1); // skip 1
                         continue;
@@ -198,6 +202,38 @@ impl Row {
                 self.hl[i] = Highlight::Number;
                 prev_sep = false;
                 continue;
+            }
+
+            if prev_sep {
+                for keyword in &syntax.keywords {
+                    let (key, is_type_1) = match keyword {
+                        Keyword::Basic(x) => (x, true),
+                        Keyword::Type(x) => (x, false),
+                    };
+
+                    let klen = key.len();
+                    let last_is_sep = if let Some(ch) = self.render.chars().nth(i + klen) {
+                        ch.is_separator()
+                    } else {
+                        true
+                    };
+
+                    if self.render.len() - i >= klen
+                        && &self.render[i..i + klen] == key
+                        && last_is_sep
+                    {
+                        for j in i..i + klen {
+                            self.hl[j] = if is_type_1 {
+                                Highlight::Keyword1
+                            } else {
+                                Highlight::Keyword2
+                            };
+                        }
+                        row_iter.nth(klen - 2); // skip keyword
+                        prev_sep = false;
+                        continue 'outer;
+                    }
+                }
             }
 
             prev_sep = c.is_separator();
