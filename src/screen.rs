@@ -3,7 +3,7 @@ use std::io::{stdout, Stdout, Write};
 
 use crossterm::{
     cursor,
-    style::{Color, Colors, Print, ResetColor, SetColors, SetForegroundColor},
+    style::{Attribute, Color, Print, SetAttribute, SetForegroundColor},
     terminal, QueueableCommand, Result,
 };
 
@@ -71,21 +71,32 @@ impl Screen {
                 let mut hl = hl_iter.next();
                 let mut current_color = Color::Reset;
                 for c in rows[filerow].render[start..end].to_string().chars() {
-                    let highlight = *hl.unwrap();
-                    if highlight.is_normal() {
+                    if c.is_ascii_control() {
+                        let sym = (c as u8 + b'@') as char;
+                        self.stdout
+                            .queue(SetAttribute(Attribute::Reverse))?
+                            .queue(Print(sym))?
+                            .queue(SetAttribute(Attribute::Reset))?;
                         if current_color != Color::Reset {
-                            self.stdout.queue(SetForegroundColor(Color::Reset))?;
-                            current_color = Color::Reset;
+                            self.stdout.queue(SetForegroundColor(current_color))?;
                         }
                     } else {
-                        let color = highlight.syntax_to_color();
-                        if color != current_color {
-                            self.stdout.queue(SetForegroundColor(color))?;
-                            current_color = color;
+                        let highlight = *hl.unwrap();
+                        if highlight.is_normal() {
+                            if current_color != Color::Reset {
+                                self.stdout.queue(SetForegroundColor(Color::Reset))?;
+                                current_color = Color::Reset;
+                            }
+                        } else {
+                            let color = highlight.syntax_to_color();
+                            if color != current_color {
+                                self.stdout.queue(SetForegroundColor(color))?;
+                                current_color = color;
+                            }
                         }
+                        self.stdout.queue(Print(c))?;
+                        hl = hl_iter.next();
                     }
-                    self.stdout.queue(Print(c))?;
-                    hl = hl_iter.next();
                 }
                 self.stdout.queue(SetForegroundColor(Color::Reset))?;
             }
@@ -153,11 +164,12 @@ impl Screen {
 
         self.stdout
             .queue(cursor::MoveTo(0, self.height))?
-            .queue(SetColors(Colors::new(Color::Black, Color::White)))?
+            // .queue(SetColors(Colors::new(Color::Black, Color::White)))?
+            .queue(SetAttribute(Attribute::Reverse))?
             .queue(Print(format!("{status}{rstatus}")))?
             .queue(cursor::MoveTo(0, self.height + 1))?
             .queue(Print(format!("{help:0$}", screen_width)))?
-            .queue(ResetColor)?;
+            .queue(SetAttribute(Attribute::Reset))?;
         Ok(())
     }
 }
