@@ -18,6 +18,8 @@ pub struct EditorSyntax {
     pub filetype: String,
     pub filematch: Vec<String>,
     pub singleline_comment_start: Option<String>,
+    pub multiline_comment_start: Option<String>,
+    pub multiline_comment_end: Option<String>,
     pub flags: EditorFlags,
     pub keywords: Vec<Keyword>,
 }
@@ -28,6 +30,8 @@ impl EditorSyntax {
             filetype: "c".to_string(),
             filematch: vec!["c".to_string(), "h".to_string(), "cpp".to_string()],
             singleline_comment_start: Some("//".to_string()),
+            multiline_comment_start: Some("/*".to_string()),
+            multiline_comment_end: Some("*/".to_string()),
             flags: highlight::NUMBERS | highlight::STRINGS,
             keywords: vec![
                 Keyword::Basic("switch".to_string()),

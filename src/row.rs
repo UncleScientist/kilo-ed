@@ -12,6 +12,7 @@ pub enum Highlight {
     Comment,
     Keyword1,
     Keyword2,
+    MultilineComment,
 }
 
 impl Highlight {
@@ -24,6 +25,7 @@ impl Highlight {
             Highlight::Comment => Color::Cyan,
             Highlight::Keyword1 => Color::Yellow,
             Highlight::Keyword2 => Color::Green,
+            Highlight::MultilineComment => Color::Cyan,
         }
     }
 
@@ -153,7 +155,10 @@ impl Row {
         let mut prev_sep = true;
         let mut row_iter = self.render.chars().enumerate();
         let mut in_string = None;
+        let mut in_comment = false;
         let scs = syntax.singleline_comment_start.as_ref();
+        let mcs = syntax.multiline_comment_start.as_ref();
+        let mce = syntax.multiline_comment_end.as_ref();
 
         'outer: while let Some((i, c)) = row_iter.next() {
             let prev_hl = if i > 0 {
@@ -162,15 +167,37 @@ impl Row {
                 Highlight::Normal
             };
 
-            if in_string.is_none() && scs.is_some() {
+            if in_string.is_none() && scs.is_some() && !in_comment {
                 if let Some(scs) = scs {
                     let len = scs.len();
 
                     if self.render.len() - i >= len && &self.render[i..i + len] == scs {
-                        for j in i..self.render.len() {
-                            self.hl[j] = Highlight::Comment;
-                        }
+                        self.hl[i..self.render.len()].fill(Highlight::Comment);
                         break;
+                    }
+                }
+            }
+
+            if mcs.is_some() && mce.is_some() && in_string.is_none() {
+                if in_comment {
+                    self.hl[i] = Highlight::MultilineComment;
+                    if let Some(mce) = mce {
+                        let len = mce.len();
+                        if self.render.len() - i >= len && &self.render[i..i + len] == mce {
+                            self.hl[i..i + len].fill(Highlight::MultilineComment);
+                            row_iter.nth(len - 2);
+                            in_comment = false;
+                            prev_sep = true;
+                        }
+                        continue;
+                    }
+                } else if let Some(mcs) = mcs {
+                    let len = mcs.len();
+                    if self.render.len() - i >= len && &self.render[i..i + len] == mcs {
+                        self.hl[i..i + len].fill(Highlight::MultilineComment);
+                        row_iter.nth(len - 2);
+                        in_comment = true;
+                        continue;
                     }
                 }
             }
@@ -222,13 +249,11 @@ impl Row {
                         && &self.render[i..i + klen] == key
                         && last_is_sep
                     {
-                        for j in i..i + klen {
-                            self.hl[j] = if is_type_1 {
-                                Highlight::Keyword1
-                            } else {
-                                Highlight::Keyword2
-                            };
-                        }
+                        self.hl[i..i + klen].fill(if is_type_1 {
+                            Highlight::Keyword1
+                        } else {
+                            Highlight::Keyword2
+                        });
                         row_iter.nth(klen - 2); // skip keyword
                         prev_sep = false;
                         continue 'outer;
