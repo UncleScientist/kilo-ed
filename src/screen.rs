@@ -16,6 +16,8 @@ pub struct Screen {
     height: u16,
 }
 
+const LNO_SHIFT: u16 = 7;
+
 impl Screen {
     pub fn new() -> Result<Self> {
         let (columns, rows) = crossterm::terminal::size()?;
@@ -38,18 +40,18 @@ impl Screen {
                     if welcome.len() < self.width as usize {
                         let leftmost = ((self.width as usize - welcome.len()) / 2) as u16;
                         self.stdout
-                            .queue(cursor::MoveTo(0, row))?
+                            .queue(cursor::MoveTo(LNO_SHIFT, row))?
                             .queue(Print("~".to_string()))?
-                            .queue(cursor::MoveTo(leftmost, row))?
+                            .queue(cursor::MoveTo(leftmost + LNO_SHIFT, row))?
                             .queue(Print(welcome))?;
                     } else {
                         self.stdout
-                            .queue(cursor::MoveTo(0, row))?
+                            .queue(cursor::MoveTo(LNO_SHIFT, row))?
                             .queue(Print(welcome))?;
                     }
                 } else {
                     self.stdout
-                        .queue(cursor::MoveTo(0, row))?
+                        .queue(cursor::MoveTo(LNO_SHIFT, row))?
                         .queue(Print("~".to_string()))?;
                 }
             } else {
@@ -60,16 +62,20 @@ impl Screen {
                 len -= coloff as usize;
                 let start = coloff as usize;
                 let end = start
-                    + if len >= self.width as usize {
-                        self.width as usize
+                    + if len >= (self.width - LNO_SHIFT) as usize {
+                        (self.width - LNO_SHIFT) as usize
                     } else {
                         len
                     };
 
-                self.stdout.queue(cursor::MoveTo(0, row))?;
                 let mut hl_iter = rows[filerow].iter_highlight(start, end);
                 let mut hl = hl_iter.next();
                 let mut current_color = Color::Reset;
+                self.stdout
+                    .queue(SetAttribute(Attribute::Reset))?
+                    .queue(cursor::MoveTo(0, row))?
+                    .queue(Print(format!("{:5}", filerow + 1)))?
+                    .queue(cursor::MoveTo(LNO_SHIFT, row))?;
                 for c in rows[filerow].render[start..end].to_string().chars() {
                     if c.is_ascii_control() {
                         let sym = (c as u8 + b'@') as char;
@@ -122,14 +128,16 @@ impl Screen {
         rowoff: u16,
         coloff: u16,
     ) -> Result<()> {
-        self.stdout
-            .queue(cursor::MoveTo(render_x - coloff, pos.y - rowoff))?;
+        self.stdout.queue(cursor::MoveTo(
+            render_x - coloff + LNO_SHIFT,
+            pos.y - rowoff,
+        ))?;
         Ok(())
     }
 
     pub fn bounds(&self) -> Position {
         Position {
-            x: self.width,
+            x: self.width - LNO_SHIFT,
             y: self.height,
         }
     }
