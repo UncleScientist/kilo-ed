@@ -39,18 +39,20 @@ pub struct Row {
     pub render: String,
     hl: Vec<Highlight>,
     saved_highlight: Vec<Highlight>,
+    pub open_comment: bool,
 }
 
 impl Row {
-    pub fn new(chars: String, syntax: &Option<EditorSyntax>) -> Self {
+    pub fn new(chars: String) -> Self {
         let mut result = Self {
             chars,
             render: String::new(),
             hl: Vec::new(),
             saved_highlight: Vec::new(),
+            open_comment: false,
         };
 
-        result.render_row(syntax);
+        result.render_row();
         result
     }
 
@@ -87,39 +89,39 @@ impl Row {
         self.chars.len() as u16
     }
 
-    pub fn insert_char(&mut self, at: usize, c: char, syntax: &Option<EditorSyntax>) {
+    pub fn insert_char(&mut self, at: usize, c: char) {
         if at >= self.chars.len() {
             self.chars.push(c);
         } else {
             self.chars.insert(at, c);
         }
-        self.render_row(syntax);
+        self.render_row();
     }
 
     /* returns true if row was modified, false otherwise */
-    pub fn del_char(&mut self, at: usize, syntax: &Option<EditorSyntax>) -> bool {
+    pub fn del_char(&mut self, at: usize) -> bool {
         if at >= self.chars.len() {
             false
         } else {
             self.chars.remove(at);
-            self.render_row(syntax);
+            self.render_row();
             true
         }
     }
 
-    pub fn split(&mut self, at: usize, syntax: &Option<EditorSyntax>) -> String {
+    pub fn split(&mut self, at: usize) -> String {
         let result = self.chars.split_off(at);
-        self.render_row(syntax);
+        self.render_row();
 
         result
     }
 
-    pub fn append_string(&mut self, s: &str, syntax: &Option<EditorSyntax>) {
+    pub fn append_string(&mut self, s: &str) {
         self.chars.push_str(s);
-        self.render_row(syntax);
+        self.render_row();
     }
 
-    fn render_row(&mut self, syntax: &Option<EditorSyntax>) {
+    fn render_row(&mut self) {
         let mut render = String::new();
         let mut idx = 0;
         for c in self.chars.chars() {
@@ -140,22 +142,22 @@ impl Row {
         }
 
         self.render = render;
-        self.update_syntax(syntax);
     }
 
-    pub fn update_syntax(&mut self, syntax: &Option<EditorSyntax>) {
+    // returns true if we're in the middle of a multi-line comment
+    pub fn update_syntax(&mut self, ml_comment: bool, syntax: &Option<EditorSyntax>) -> bool {
         self.hl = vec![Highlight::Normal; self.render.len()];
 
         let syntax = if let Some(syntax) = syntax {
             syntax
         } else {
-            return;
+            return ml_comment;
         };
 
         let mut prev_sep = true;
         let mut row_iter = self.render.chars().enumerate();
         let mut in_string = None;
-        let mut in_comment = false;
+        let mut in_comment = ml_comment;
         let scs = syntax.singleline_comment_start.as_ref();
         let mcs = syntax.multiline_comment_start.as_ref();
         let mce = syntax.multiline_comment_end.as_ref();
@@ -263,6 +265,11 @@ impl Row {
 
             prev_sep = c.is_separator();
         }
+
+        let changed = self.open_comment != in_comment;
+        self.open_comment = in_comment;
+
+        changed
     }
 
     pub fn iter_highlight(&self, start: usize, end: usize) -> std::slice::Iter<Highlight> {

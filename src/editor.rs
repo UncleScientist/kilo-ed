@@ -76,7 +76,7 @@ impl Editor {
         let syntax = Editor::find_highlight(&hldb, filename.as_str());
         let syntax_data = syntax.map(|idx| hldb[idx].clone());
 
-        Ok(Self {
+        let mut ed = Self {
             filename,
             status_msg: String::from("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find"),
             status_time: Instant::now(),
@@ -89,7 +89,7 @@ impl Editor {
                 let v = Vec::from(data);
                 let mut rows = Vec::new();
                 for row in v {
-                    rows.push(Row::new(row, &syntax_data))
+                    rows.push(Row::new(row))
                 }
                 if rows.last().unwrap().len() == 0 {
                     rows.pop();
@@ -106,10 +106,19 @@ impl Editor {
             saved_hl: None,
             hldb,
             syntax,
-        })
+        };
+
+        let mut in_comment = false;
+        for r in ed.rows.iter_mut() {
+            r.update_syntax(in_comment, &syntax_data);
+            in_comment = r.open_comment;
+        }
+
+        Ok(ed)
     }
 
     pub fn process_keypress(&mut self) -> Result<bool> {
+        let prev_dirty = self.dirty;
         if let Ok(c) = self.keyboard.read() {
             match c {
                 /*
@@ -244,6 +253,13 @@ impl Editor {
         } else {
             self.die("Unable to read from keyboard");
         }
+
+        if prev_dirty < self.dirty {
+            let prev_row_status =
+                self.cursor.y > 0 && self.rows[(self.cursor.y - 1) as usize].open_comment;
+            self.update_remaining_lines(self.cursor.y as usize, prev_row_status);
+        }
+
         self.quit_times = KILO_QUIT_TIMES;
         Ok(false)
     }
@@ -372,11 +388,10 @@ impl Editor {
     }
 
     fn insert_char(&mut self, c: char) {
-        let syntax_data = self.get_syntax_data();
         if !self.cursor.above(self.rows.len()) {
             self.insert_row(self.rows.len(), String::new());
         }
-        self.rows[self.cursor.y as usize].insert_char(self.cursor.x as usize, c, &syntax_data);
+        self.rows[self.cursor.y as usize].insert_char(self.cursor.x as usize, c);
         self.cursor.x += 1;
         self.dirty += 1;
     }
@@ -390,17 +405,16 @@ impl Editor {
         }
 
         let cur_row = self.cursor.y as usize;
-        let syntax_data = self.get_syntax_data();
 
         if self.cursor.x > 0 {
-            if self.rows[cur_row].del_char(self.cursor.x as usize - 1, &syntax_data) {
+            if self.rows[cur_row].del_char(self.cursor.x as usize - 1) {
                 self.dirty += 1;
                 self.cursor.x -= 1;
             }
         } else {
             self.cursor.x = self.rows[cur_row - 1].len() as u16;
             if let Some(row) = self.del_row(cur_row) {
-                self.rows[cur_row - 1].append_string(&row, &syntax_data);
+                self.rows[cur_row - 1].append_string(&row);
                 self.cursor.y -= 1;
                 self.dirty += 1;
             }
@@ -408,13 +422,12 @@ impl Editor {
     }
 
     fn insert_newline(&mut self) {
-        let syntax_data = self.get_syntax_data();
         let row = self.cursor.y as usize;
 
         if self.cursor.x == 0 {
             self.insert_row(row, String::from(""));
         } else {
-            let new_row = self.rows[row].split(self.cursor.x as usize, &syntax_data);
+            let new_row = self.rows[row].split(self.cursor.x as usize);
             self.insert_row(row + 1, new_row);
         }
         self.cursor.y += 1;
@@ -422,12 +435,11 @@ impl Editor {
     }
 
     fn insert_row(&mut self, at: usize, s: String) {
-        let syntax_data = self.get_syntax_data();
         if at > self.rows.len() {
             return;
         }
 
-        self.rows.insert(at, Row::new(s, &syntax_data));
+        self.rows.insert(at, Row::new(s));
         self.dirty += 1;
     }
 
@@ -657,11 +669,20 @@ impl Editor {
         let old_syntax = self.syntax;
         self.syntax = Editor::find_highlight(&self.hldb, &self.filename);
         if self.syntax != old_syntax {
-            let syntax_data = self.get_syntax_data();
+            self.update_remaining_lines(0, false);
+        }
+    }
 
-            for r in self.rows.iter_mut() {
-                r.update_syntax(&syntax_data);
+    fn update_remaining_lines(&mut self, start: usize, in_comment: bool) {
+        let mut in_multiline_comment = in_comment;
+        let syntax_data = self.get_syntax_data();
+
+        for r in self.rows[start..].iter_mut() {
+            let changed = r.update_syntax(in_multiline_comment, &syntax_data);
+            if !changed {
+                break;
             }
+            in_multiline_comment = r.open_comment;
         }
     }
 
