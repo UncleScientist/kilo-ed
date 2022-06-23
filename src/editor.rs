@@ -285,7 +285,7 @@ impl Editor {
         self.scroll();
         self.screen.clear()?;
         self.screen
-            .draw_rows(&self.rows, self.rowoff, self.coloff)?;
+            .draw_rows(&self.rows, self.rowoff, self.coloff, self.cursor.y)?;
         if !self.status_msg.is_empty() && self.status_time.elapsed() > Duration::from_secs(5) {
             self.status_msg.clear();
         }
@@ -307,7 +307,7 @@ impl Editor {
                 } else {
                     "no ft"
                 },
-                self.cursor.y,
+                self.cursor.y + 1,
                 self.rows.len()
             ),
             &self.status_msg,

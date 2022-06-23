@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt::Display;
 use std::io::{stdout, Stdout, Write};
 
@@ -28,7 +29,7 @@ impl Screen {
         })
     }
 
-    pub fn draw_rows(&mut self, rows: &[Row], rowoff: u16, coloff: u16) -> Result<()> {
+    pub fn draw_rows(&mut self, rows: &[Row], rowoff: u16, coloff: u16, crow: u16) -> Result<()> {
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
         for row in 0..self.height {
@@ -71,11 +72,26 @@ impl Screen {
                 let mut hl_iter = rows[filerow].iter_highlight(start, end);
                 let mut hl = hl_iter.next();
                 let mut current_color = Color::Reset;
+
+                // Display line number on the left
+                let order = crow.cmp(&(filerow as u16));
+                let gutter_num = match order {
+                    Ordering::Less => filerow as u16 - crow,
+                    Ordering::Equal => (filerow + 1) as u16,
+                    Ordering::Greater => crow - filerow as u16,
+                };
+
                 self.stdout
                     .queue(SetAttribute(Attribute::Reset))?
                     .queue(cursor::MoveTo(0, row))?
-                    .queue(Print(format!("{:5}", filerow + 1)))?
+                    .queue(if order == Ordering::Equal {
+                        Print(format!("{gutter_num:<5}"))
+                    } else {
+                        Print(format!("{gutter_num:5}"))
+                    })?
                     .queue(cursor::MoveTo(LNO_SHIFT, row))?;
+
+                // Draw row in remaining columns
                 for c in rows[filerow].render[start..end].to_string().chars() {
                     if c.is_ascii_control() {
                         let sym = (c as u8 + b'@') as char;
