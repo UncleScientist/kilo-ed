@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use config::Config;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::{terminal, Result};
 use errno::errno;
@@ -53,34 +54,45 @@ pub struct Editor {
     saved_hl: Option<usize>,
     hldb: Vec<EditorSyntax>,
     syntax: Option<usize>, // index into hldb
+                           // config: Config,
 }
 
 impl Editor {
-    pub fn with_file<P: AsRef<Path> + ToString>(filename: P) -> Result<Self> {
+    pub fn with_file<P: AsRef<Path> + ToString>(config: Config, filename: P) -> Result<Self> {
         let fn_string = filename.to_string();
         let lines = std::fs::read_to_string(filename)
             .expect("Unable to open file")
             .split('\n')
             .map(|x| x.into())
             .collect::<Vec<String>>();
-        Editor::build(&lines, fn_string)
+        Editor::build(&lines, fn_string, config)
     }
 
-    pub fn new() -> Result<Self> {
-        Editor::build(&[], "")
+    pub fn new(config: Config) -> Result<Self> {
+        Editor::build(&[], "", config)
     }
 
-    fn build<T: Into<String>>(data: &[String], filename: T) -> Result<Self> {
+    fn build<T: Into<String>>(data: &[String], filename: T, config: Config) -> Result<Self> {
         let filename: String = filename.into();
         let hldb = EditorSyntax::new();
         let syntax = Editor::find_highlight(&hldb, filename.as_str());
         let syntax_data = syntax.map(|idx| hldb[idx].clone());
 
+        let line_num_config = match config
+            .get_string("line_numbers")
+            .unwrap_or_else(|_| "relative".to_string())
+            .as_str()
+        {
+            "absolute" => LineNumbers::Absolute,
+            "relative" => LineNumbers::Relative,
+            _ => LineNumbers::Off,
+        };
+
         let mut ed = Self {
             filename,
             status_msg: String::from("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find"),
             status_time: Instant::now(),
-            screen: Screen::new()?,
+            screen: Screen::new(line_num_config)?,
             keyboard: Keyboard {},
             cursor: Position::default(),
             rows: if data.is_empty() {
@@ -106,6 +118,7 @@ impl Editor {
             saved_hl: None,
             hldb,
             syntax,
+            // config,
         };
 
         let mut in_comment = false;

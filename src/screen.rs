@@ -11,21 +11,36 @@ use crossterm::{
 use crate::row::*;
 use kilo_ed::*;
 
+#[derive(PartialEq, Copy, Clone)]
+pub enum LineNumbers {
+    Off,
+    Absolute,
+    Relative,
+}
+
 pub struct Screen {
     stdout: Stdout,
     width: u16,
     height: u16,
+    ln_fmt: LineNumbers,
+    ln_shift: u16,
 }
 
 const LNO_SHIFT: u16 = 7;
 
 impl Screen {
-    pub fn new() -> Result<Self> {
+    pub fn new(ln_fmt: LineNumbers) -> Result<Self> {
         let (columns, rows) = crossterm::terminal::size()?;
         Ok(Self {
             width: columns,
             height: rows - 2,
             stdout: stdout(),
+            ln_fmt,
+            ln_shift: if ln_fmt == LineNumbers::Off {
+                0
+            } else {
+                LNO_SHIFT
+            },
         })
     }
 
@@ -41,18 +56,18 @@ impl Screen {
                     if welcome.len() < self.width as usize {
                         let leftmost = ((self.width as usize - welcome.len()) / 2) as u16;
                         self.stdout
-                            .queue(cursor::MoveTo(LNO_SHIFT, row))?
+                            .queue(cursor::MoveTo(self.ln_shift, row))?
                             .queue(Print("~".to_string()))?
-                            .queue(cursor::MoveTo(leftmost + LNO_SHIFT, row))?
+                            .queue(cursor::MoveTo(leftmost + self.ln_shift, row))?
                             .queue(Print(welcome))?;
                     } else {
                         self.stdout
-                            .queue(cursor::MoveTo(LNO_SHIFT, row))?
+                            .queue(cursor::MoveTo(self.ln_shift, row))?
                             .queue(Print(welcome))?;
                     }
                 } else {
                     self.stdout
-                        .queue(cursor::MoveTo(LNO_SHIFT, row))?
+                        .queue(cursor::MoveTo(self.ln_shift, row))?
                         .queue(Print("~".to_string()))?;
                 }
             } else {
@@ -63,8 +78,8 @@ impl Screen {
                 len -= coloff as usize;
                 let start = coloff as usize;
                 let end = start
-                    + if len >= (self.width - LNO_SHIFT) as usize {
-                        (self.width - LNO_SHIFT) as usize
+                    + if len >= (self.width - self.ln_shift) as usize {
+                        (self.width - self.ln_shift) as usize
                     } else {
                         len
                     };
@@ -75,21 +90,30 @@ impl Screen {
 
                 // Display line number on the left
                 let order = crow.cmp(&(filerow as u16));
-                let gutter_num = match order {
-                    Ordering::Less => filerow as u16 - crow,
-                    Ordering::Equal => (filerow + 1) as u16,
-                    Ordering::Greater => crow - filerow as u16,
+
+                let gutter_num = if self.ln_fmt == LineNumbers::Relative {
+                    match order {
+                        Ordering::Less => filerow as u16 - crow,
+                        Ordering::Equal => (filerow + 1) as u16,
+                        Ordering::Greater => crow - filerow as u16,
+                    }
+                } else {
+                    (filerow + 1) as u16
                 };
 
-                self.stdout
-                    .queue(SetAttribute(Attribute::Reset))?
-                    .queue(cursor::MoveTo(0, row))?
-                    .queue(if order == Ordering::Equal {
-                        Print(format!("{gutter_num:<5}"))
-                    } else {
-                        Print(format!("{gutter_num:5}"))
-                    })?
-                    .queue(cursor::MoveTo(LNO_SHIFT, row))?;
+                if matches!(self.ln_fmt, LineNumbers::Absolute | LineNumbers::Relative) {
+                    self.stdout
+                        .queue(SetAttribute(Attribute::Reset))?
+                        .queue(cursor::MoveTo(0, row))?
+                        .queue(
+                            if order == Ordering::Equal && self.ln_fmt == LineNumbers::Relative {
+                                Print(format!("{gutter_num:<5}"))
+                            } else {
+                                Print(format!("{gutter_num:5}"))
+                            },
+                        )?;
+                }
+                self.stdout.queue(cursor::MoveTo(self.ln_shift, row))?;
 
                 // Draw row in remaining columns
                 for c in rows[filerow].render[start..end].to_string().chars() {
@@ -145,7 +169,7 @@ impl Screen {
         coloff: u16,
     ) -> Result<()> {
         self.stdout.queue(cursor::MoveTo(
-            render_x - coloff + LNO_SHIFT,
+            render_x - coloff + self.ln_shift,
             pos.y - rowoff,
         ))?;
         Ok(())
@@ -153,7 +177,7 @@ impl Screen {
 
     pub fn bounds(&self) -> Position {
         Position {
-            x: self.width - LNO_SHIFT,
+            x: self.width - self.ln_shift,
             y: self.height,
         }
     }
