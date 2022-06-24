@@ -78,15 +78,36 @@ impl Editor {
         let syntax = Editor::find_highlight(&hldb, filename.as_str());
         let syntax_data = syntax.map(|idx| hldb[idx].clone());
 
-        let line_num_config = match config
+        let line_num_config = {
+            if let Ok(table) = config.get_table("display") {
+                match table.get("line_numbers") {
+                    Some(val) => {
+                        let val = val.clone(); // but why
+                        match val
+                            .into_string()
+                            .unwrap_or_else(|_| "".to_string())
+                            .as_str()
+                        {
+                            "absolute" => LineNumbers::Absolute,
+                            "relative" => LineNumbers::Relative,
+                            _ => LineNumbers::Off,
+                        }
+                    }
+                    None => LineNumbers::Off,
+                }
+            } else {
+                LineNumbers::Off
+            }
+        };
+        /*
+         * let line_num_config =
+            match config
             .get_string("line_numbers")
             .unwrap_or_else(|_| "relative".to_string())
             .as_str()
         {
-            "absolute" => LineNumbers::Absolute,
-            "relative" => LineNumbers::Relative,
-            _ => LineNumbers::Off,
         };
+        */
 
         let mut ed = Self {
             filename,

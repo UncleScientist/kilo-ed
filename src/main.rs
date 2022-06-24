@@ -1,6 +1,6 @@
-use std::path::Path;
+use std::collections::HashMap;
 
-use config::{Config, ConfigError, File, FileFormat};
+use config::{builder::DefaultState, Config, ConfigBuilder, File, FileFormat, Value};
 use crossterm::Result;
 use xdg::BaseDirectories;
 
@@ -15,17 +15,21 @@ use editor::*;
 fn main() -> Result<()> {
     let mut args = std::env::args();
     let config_file = BaseDirectories::with_prefix("kilo-ed")?.find_config_file("init");
+    let config_builder = default_config();
 
-    let config = if let Some(config_file) = config_file {
-        match load_config(&config_file) {
-            Ok(config) => config,
-            Err(_) => {
-                eprintln!("unable to load config file, using defaults");
-                default_config()
-            }
-        }
+    // If there's a file, add it to the config
+    let config_builder = if let Some(config_file) = config_file {
+        config_builder.add_source(File::new(config_file.to_str().unwrap(), FileFormat::Ini))
     } else {
-        default_config()
+        config_builder
+    };
+
+    // Attempt to load the config from the defaults + any file found above
+    let config = if let Ok(config) = config_builder.build() {
+        config
+    } else {
+        // Failsafe: if the file failed to read, then fall back to the defaults
+        default_config().build().unwrap()
     };
 
     let mut editor = if args.len() >= 2 {
@@ -39,17 +43,11 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn load_config(path: &Path) -> core::result::Result<Config, ConfigError> {
+fn default_config() -> ConfigBuilder<DefaultState> {
+    let display: HashMap<String, Value> = [("line_numbers".to_string(), "relative".into())]
+        .into_iter()
+        .collect();
     Config::builder()
-        .set_default("line_numbers", "relative")?
-        .add_source(File::new(path.to_str().unwrap(), FileFormat::Ini))
-        .build()
-}
-
-fn default_config() -> Config {
-    Config::builder()
-        .set_default("line_numbers", "relative")
+        .set_default("display", display)
         .expect("oops")
-        .build()
-        .expect("oops again")
 }
