@@ -44,6 +44,11 @@ impl Screen {
         })
     }
 
+    pub fn resize(&mut self, columns: u16, rows: u16) {
+        self.width = columns;
+        self.height = rows - 2;
+    }
+
     pub fn draw_rows(&mut self, rows: &[Row], rowoff: u16, coloff: u16, crow: u16) -> Result<()> {
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -197,7 +202,7 @@ impl Screen {
 
         let status = format!("{left:0$}", left_width.min(screen_width));
         let mut rstatus = String::new();
-        if status.len() < screen_width - right_width {
+        if right_width < screen_width && status.len() < screen_width - right_width {
             let mut len = status.len();
             while len < screen_width {
                 if screen_width - len == right_width {

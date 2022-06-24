@@ -153,7 +153,8 @@ impl Editor {
 
     pub fn process_keypress(&mut self) -> Result<bool> {
         let prev_dirty = self.dirty;
-        if let Ok(c) = self.keyboard.read() {
+        let event = self.keyboard.read();
+        if let Ok(c) = event {
             match c {
                 /*
                  * Ctrl-Q to quit
@@ -284,10 +285,13 @@ impl Editor {
                     _ => {}
                 },
             }
+        } else if let Err(ResultCode::Resized(col, row)) = event {
+            self.screen.resize(col, row);
         } else {
             self.die("Unable to read from keyboard");
         }
 
+        // if the text changed, then update the syntax highlighting
         if prev_dirty < self.dirty {
             let prev_row_status =
                 self.cursor.y > 0 && self.rows[(self.cursor.y - 1) as usize].open_comment;

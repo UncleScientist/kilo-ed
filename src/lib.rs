@@ -2,6 +2,7 @@ pub type EditorResult<T, E> = std::result::Result<T, E>;
 
 pub enum ResultCode {
     KeyReadFail,
+    Resized(u16, u16),
 }
 
 #[derive(Default, Clone, Copy)]
