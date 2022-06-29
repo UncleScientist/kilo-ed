@@ -8,43 +8,35 @@ use crossterm::{
     terminal, QueueableCommand, Result,
 };
 
+use crate::options::*;
 use crate::row::*;
 use kilo_ed::*;
-
-#[derive(PartialEq, Copy, Clone)]
-pub enum LineNumbers {
-    Off,
-    Absolute,
-    Relative,
-}
 
 pub struct Screen {
     stdout: Stdout,
     width: u16,
     height: u16,
     gaps: Vec<u16>,
-    ln_fmt: LineNumbers,
+    options: Options,
     ln_shift: u16,
-    soft_wrap: bool,
 }
 
 const LNO_SHIFT: u16 = 7;
 
 impl Screen {
-    pub fn new(ln_fmt: LineNumbers) -> Result<Self> {
+    pub fn new(options: Options) -> Result<Self> {
         let (columns, rows) = crossterm::terminal::size()?;
         Ok(Self {
             width: columns,
             height: rows - 2,
             stdout: stdout(),
             gaps: Vec::new(),
-            ln_fmt,
-            ln_shift: if ln_fmt == LineNumbers::Off {
+            options,
+            ln_shift: if options.lines == LineNumbers::Off {
                 0
             } else {
                 LNO_SHIFT
             },
-            soft_wrap: false,
         })
     }
 
@@ -60,7 +52,7 @@ impl Screen {
         let mut gaps = 0;
 
         for row in 0..self.height {
-            if self.soft_wrap && row + gaps >= self.height {
+            if self.options.soft_wrap && row + gaps >= self.height {
                 break;
             }
             let filerow = (row + rowoff) as usize;
@@ -88,7 +80,7 @@ impl Screen {
             } else {
                 // Display line number on the left
                 let order = crow.cmp(&(filerow as u16));
-                let gutter_num = if self.ln_fmt == LineNumbers::Relative {
+                let gutter_num = if self.options.lines == LineNumbers::Relative {
                     match order {
                         Ordering::Less => filerow as u16 - crow,
                         Ordering::Equal => (filerow + 1) as u16,
@@ -98,12 +90,17 @@ impl Screen {
                     (filerow + 1) as u16
                 };
 
-                if matches!(self.ln_fmt, LineNumbers::Absolute | LineNumbers::Relative) {
+                if matches!(
+                    self.options.lines,
+                    LineNumbers::Absolute | LineNumbers::Relative
+                ) {
                     self.stdout
                         .queue(SetAttribute(Attribute::Reset))?
                         .queue(cursor::MoveTo(0, row + gaps))?
                         .queue(
-                            if order == Ordering::Equal && self.ln_fmt == LineNumbers::Relative {
+                            if order == Ordering::Equal
+                                && self.options.lines == LineNumbers::Relative
+                            {
                                 Print(format!("{gutter_num:<5}"))
                             } else {
                                 Print(format!("{gutter_num:5}"))
@@ -111,8 +108,12 @@ impl Screen {
                         )?;
                 }
 
-                let start = if self.soft_wrap { 0 } else { coloff as usize };
-                let end = if !self.soft_wrap {
+                let start = if self.options.soft_wrap {
+                    0
+                } else {
+                    coloff as usize
+                };
+                let end = if !self.options.soft_wrap {
                     let mut len = rows[filerow].render_len();
                     if len < coloff as usize {
                         continue;
@@ -171,7 +172,7 @@ impl Screen {
                                 hl = hl_iter.next();
                             }
                         }
-                        if !self.soft_wrap {
+                        if !self.options.soft_wrap {
                             break;
                         }
                         screen_row_count += 1;
@@ -187,11 +188,24 @@ impl Screen {
         Ok(())
     }
 
-    pub fn clear(&mut self) -> Result<()> {
+    pub fn clear(&mut self, rows: &[Row], rowoff: u16) -> Result<u16> {
         self.stdout
             .queue(terminal::Clear(terminal::ClearType::All))?
             .queue(cursor::MoveTo(0, 0))?;
-        Ok(())
+        Ok(if self.options.soft_wrap {
+            let mut count = 0;
+            let mut display_height = 0u16;
+            for r in &rows[rowoff as usize..] {
+                count += 1;
+                display_height += (r.len() / ((self.width - self.ln_shift) as usize) + 1) as u16;
+                if display_height >= self.height {
+                    break;
+                }
+            }
+            count
+        } else {
+            0
+        })
     }
 
     pub fn flush(&mut self) -> Result<()> {
@@ -208,13 +222,13 @@ impl Screen {
         let display_width = self.width - self.ln_shift;
         let shift_y = pos.x / display_width;
 
-        let pos_x = if self.soft_wrap {
+        let pos_x = if self.options.soft_wrap {
             pos.x % display_width + self.ln_shift
         } else {
             render_x - coloff + self.ln_shift
         };
 
-        let pos_y = if self.soft_wrap {
+        let pos_y = if self.options.soft_wrap {
             pos.y - rowoff + shift_y + self.gaps[(pos.y - rowoff) as usize]
         } else {
             pos.y - rowoff

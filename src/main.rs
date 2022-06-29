@@ -6,6 +6,7 @@ use xdg::BaseDirectories;
 
 mod editor_syntax;
 mod keyboard;
+mod options;
 mod row;
 mod screen;
 
@@ -44,9 +45,12 @@ fn main() -> Result<()> {
 }
 
 fn default_config() -> ConfigBuilder<DefaultState> {
-    let display: HashMap<String, Value> = [("line_numbers".to_string(), "relative".into())]
-        .into_iter()
-        .collect();
+    let display: HashMap<String, Value> = [
+        ("line_numbers".to_string(), "relative".into()),
+        ("soft_wrap".to_string(), "true".into()),
+    ]
+    .into_iter()
+    .collect();
     Config::builder()
         .set_default("display", display)
         .expect("oops")

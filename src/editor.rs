@@ -10,6 +10,7 @@ use kilo_ed::*;
 
 use crate::editor_syntax::*;
 use crate::keyboard::*;
+use crate::options::*;
 use crate::row::*;
 use crate::screen::*;
 
@@ -79,41 +80,35 @@ impl Editor {
         let syntax_data = syntax.map(|idx| hldb[idx].clone());
 
         let line_num_config = {
-            if let Ok(table) = config.get_table("display") {
-                match table.get("line_numbers") {
-                    Some(val) => {
-                        let val = val.clone(); // but why
-                        match val
-                            .into_string()
-                            .unwrap_or_else(|_| "".to_string())
-                            .as_str()
-                        {
-                            "absolute" => LineNumbers::Absolute,
-                            "relative" => LineNumbers::Relative,
-                            _ => LineNumbers::Off,
-                        }
-                    }
-                    None => LineNumbers::Off,
+            if let Some(lno) = read_config_parameter(&config, "display", "line_numbers") {
+                match lno.as_str() {
+                    "absolute" => LineNumbers::Absolute,
+                    "relative" => LineNumbers::Relative,
+                    _ => LineNumbers::Off,
                 }
             } else {
                 LineNumbers::Off
             }
         };
-        /*
-         * let line_num_config =
-            match config
-            .get_string("line_numbers")
-            .unwrap_or_else(|_| "relative".to_string())
-            .as_str()
-        {
+
+        let soft_wrap = {
+            if let Some(sw) = read_config_parameter(&config, "display", "soft_wrap") {
+                matches!(sw.as_str(), "true")
+            } else {
+                false
+            }
         };
-        */
+
+        let options = Options {
+            lines: line_num_config,
+            soft_wrap,
+        };
 
         let mut ed = Self {
             filename,
             status_msg: String::from("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find"),
             status_time: Instant::now(),
-            screen: Screen::new(line_num_config)?,
+            screen: Screen::new(options)?,
             keyboard: Keyboard {},
             cursor: Position::default(),
             rows: if data.is_empty() {
@@ -269,7 +264,7 @@ impl Editor {
                             KeyCode::PageUp => self.cursor.y = self.rowoff,
                             KeyCode::PageDown => {
                                 self.cursor.y =
-                                    (self.rowoff + bounds.y - 1).min(self.rows.len() as u16)
+                                    (self.rowoff + bounds.y - 1).min(self.rows.len() as u16);
                             }
                             _ => panic!("rust compiler broke"),
                         }
@@ -321,9 +316,14 @@ impl Editor {
 
     pub fn refresh_screen(&mut self) -> Result<()> {
         self.scroll();
-        self.screen.clear()?;
+        let row_count = self.screen.clear(&self.rows, self.rowoff)?;
+        if self.cursor.y > self.rowoff + row_count {
+            self.rowoff = self.cursor.y - row_count;
+        }
+
         self.screen
             .draw_rows(&self.rows, self.rowoff, self.coloff, self.cursor.y)?;
+
         if !self.status_msg.is_empty() && self.status_time.elapsed() > Duration::from_secs(5) {
             self.status_msg.clear();
         }
@@ -353,7 +353,7 @@ impl Editor {
     }
 
     pub fn die<S: Into<String>>(&mut self, message: S) {
-        let _ = self.screen.clear();
+        let _ = self.screen.clear(&self.rows, 0);
         let _ = terminal::disable_raw_mode();
         eprintln!("{}: {}", message.into(), errno());
         std::process::exit(1);
@@ -401,6 +401,7 @@ impl Editor {
         };
 
         let bounds = self.screen.bounds();
+
         if self.cursor.y < self.rowoff {
             self.rowoff = self.cursor.y;
         }
@@ -742,4 +743,14 @@ impl Editor {
             }
         }
     }
+}
+
+fn read_config_parameter(config: &Config, table: &str, key: &str) -> Option<String> {
+    config
+        .get_table(table)
+        .ok()?
+        .get(key)?
+        .clone()
+        .into_string()
+        .ok()
 }
