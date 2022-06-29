@@ -209,7 +209,7 @@ impl Row {
                     self.hl[i] = Highlight::String;
                     if c == '\\' && i + 1 < self.render.len() {
                         self.hl[i + 1] = Highlight::String;
-                        row_iter.nth(1); // skip 1
+                        row_iter.next(); // skip 1
                         continue;
                     }
                     if c == cur {
