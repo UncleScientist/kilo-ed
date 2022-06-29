@@ -272,8 +272,8 @@ impl Row {
         changed
     }
 
-    pub fn iter_highlight(&self, start: usize, end: usize) -> std::slice::Iter<Highlight> {
-        self.hl[start..end].iter()
+    pub fn iter_highlight(&self, start: usize) -> std::slice::Iter<Highlight> {
+        self.hl[start..].iter()
     }
 
     pub fn highlight_match(&mut self, start: usize, len: usize) {

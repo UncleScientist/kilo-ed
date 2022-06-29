@@ -22,8 +22,10 @@ pub struct Screen {
     stdout: Stdout,
     width: u16,
     height: u16,
+    gaps: Vec<u16>,
     ln_fmt: LineNumbers,
     ln_shift: u16,
+    soft_wrap: bool,
 }
 
 const LNO_SHIFT: u16 = 7;
@@ -35,12 +37,14 @@ impl Screen {
             width: columns,
             height: rows - 2,
             stdout: stdout(),
+            gaps: Vec::new(),
             ln_fmt,
             ln_shift: if ln_fmt == LineNumbers::Off {
                 0
             } else {
                 LNO_SHIFT
             },
+            soft_wrap: false,
         })
     }
 
@@ -51,8 +55,14 @@ impl Screen {
 
     pub fn draw_rows(&mut self, rows: &[Row], rowoff: u16, coloff: u16, crow: u16) -> Result<()> {
         const VERSION: &str = env!("CARGO_PKG_VERSION");
+        self.gaps.clear();
+        self.gaps.push(0);
+        let mut gaps = 0;
 
         for row in 0..self.height {
+            if self.soft_wrap && row + gaps >= self.height {
+                break;
+            }
             let filerow = (row + rowoff) as usize;
             if filerow >= rows.len() {
                 if rows.is_empty() && row == self.height / 3 {
@@ -76,26 +86,8 @@ impl Screen {
                         .queue(Print("~".to_string()))?;
                 }
             } else {
-                let mut len = rows[filerow].render_len();
-                if len < coloff as usize {
-                    continue;
-                }
-                len -= coloff as usize;
-                let start = coloff as usize;
-                let end = start
-                    + if len >= (self.width - self.ln_shift) as usize {
-                        (self.width - self.ln_shift) as usize
-                    } else {
-                        len
-                    };
-
-                let mut hl_iter = rows[filerow].iter_highlight(start, end);
-                let mut hl = hl_iter.next();
-                let mut current_color = Color::Reset;
-
                 // Display line number on the left
                 let order = crow.cmp(&(filerow as u16));
-
                 let gutter_num = if self.ln_fmt == LineNumbers::Relative {
                     match order {
                         Ordering::Less => filerow as u16 - crow,
@@ -109,7 +101,7 @@ impl Screen {
                 if matches!(self.ln_fmt, LineNumbers::Absolute | LineNumbers::Relative) {
                     self.stdout
                         .queue(SetAttribute(Attribute::Reset))?
-                        .queue(cursor::MoveTo(0, row))?
+                        .queue(cursor::MoveTo(0, row + gaps))?
                         .queue(
                             if order == Ordering::Equal && self.ln_fmt == LineNumbers::Relative {
                                 Print(format!("{gutter_num:<5}"))
@@ -118,39 +110,79 @@ impl Screen {
                             },
                         )?;
                 }
-                self.stdout.queue(cursor::MoveTo(self.ln_shift, row))?;
+
+                let start = if self.soft_wrap { 0 } else { coloff as usize };
+                let end = if !self.soft_wrap {
+                    let mut len = rows[filerow].render_len();
+                    if len < coloff as usize {
+                        continue;
+                    }
+                    len -= coloff as usize;
+                    start
+                        + if len >= (self.width - self.ln_shift) as usize {
+                            (self.width - self.ln_shift) as usize
+                        } else {
+                            len
+                        }
+                } else {
+                    (self.width - self.ln_shift) as usize
+                };
+
+                let mut hl_iter = rows[filerow].iter_highlight(start);
+                let mut hl = hl_iter.next();
+                let mut current_color = Color::Reset;
 
                 // Draw row in remaining columns
-                for c in rows[filerow].render[start..end].to_string().chars() {
-                    if c.is_ascii_control() {
-                        let sym = (c as u8 + b'@') as char;
+                let mut screen_row_count = 0;
+                if end > start {
+                    for s in rows[filerow].render[start..]
+                        .chars()
+                        .collect::<Vec<char>>()
+                        .chunks(end - start)
+                        .collect::<Vec<&[char]>>()
+                    {
                         self.stdout
-                            .queue(SetAttribute(Attribute::Reverse))?
-                            .queue(Print(sym))?
-                            .queue(SetAttribute(Attribute::Reset))?;
-                        if current_color != Color::Reset {
-                            self.stdout.queue(SetForegroundColor(current_color))?;
-                        }
-                    } else {
-                        let highlight = *hl.unwrap();
-                        if highlight.is_normal() {
-                            if current_color != Color::Reset {
-                                self.stdout.queue(SetForegroundColor(Color::Reset))?;
-                                current_color = Color::Reset;
+                            .queue(cursor::MoveTo(self.ln_shift, row + gaps + screen_row_count))?;
+                        for c in s {
+                            if c.is_ascii_control() {
+                                let sym = (*c as u8 + b'@') as char;
+                                self.stdout
+                                    .queue(SetAttribute(Attribute::Reverse))?
+                                    .queue(Print(sym))?
+                                    .queue(SetAttribute(Attribute::Reset))?;
+                                if current_color != Color::Reset {
+                                    self.stdout.queue(SetForegroundColor(current_color))?;
+                                }
+                            } else {
+                                let highlight = *hl.unwrap();
+                                if highlight.is_normal() {
+                                    if current_color != Color::Reset {
+                                        self.stdout.queue(SetForegroundColor(Color::Reset))?;
+                                        current_color = Color::Reset;
+                                    }
+                                } else {
+                                    let color = highlight.syntax_to_color();
+                                    if color != current_color {
+                                        self.stdout.queue(SetForegroundColor(color))?;
+                                        current_color = color;
+                                    }
+                                }
+                                self.stdout.queue(Print(c))?;
+                                hl = hl_iter.next();
                             }
-                        } else {
-                            let color = highlight.syntax_to_color();
-                            if color != current_color {
-                                self.stdout.queue(SetForegroundColor(color))?;
-                                current_color = color;
-                            }
                         }
-                        self.stdout.queue(Print(c))?;
-                        hl = hl_iter.next();
+                        if !self.soft_wrap {
+                            break;
+                        }
+                        screen_row_count += 1;
                     }
+                }
+                if screen_row_count > 1 {
+                    gaps += screen_row_count - 1;
                 }
                 self.stdout.queue(SetForegroundColor(Color::Reset))?;
             }
+            self.gaps.push(gaps);
         }
         Ok(())
     }
@@ -173,17 +205,30 @@ impl Screen {
         rowoff: u16,
         coloff: u16,
     ) -> Result<()> {
-        self.stdout.queue(cursor::MoveTo(
-            render_x - coloff + self.ln_shift,
-            pos.y - rowoff,
-        ))?;
+        let display_width = self.width - self.ln_shift;
+        let shift_y = pos.x / display_width;
+
+        let pos_x = if self.soft_wrap {
+            pos.x % display_width + self.ln_shift
+        } else {
+            render_x - coloff + self.ln_shift
+        };
+
+        let pos_y = if self.soft_wrap {
+            pos.y - rowoff + shift_y + self.gaps[(pos.y - rowoff) as usize]
+        } else {
+            pos.y - rowoff
+        };
+
+        self.stdout.queue(cursor::MoveTo(pos_x, pos_y))?;
+
         Ok(())
     }
 
     pub fn bounds(&self) -> Position {
         Position {
             x: self.width - self.ln_shift,
-            y: self.height,
+            y: self.height - self.gaps.last().unwrap_or(&0),
         }
     }
 
