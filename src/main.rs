@@ -13,6 +13,8 @@ mod screen;
 mod editor;
 use editor::*;
 
+use options::Options;
+
 fn main() -> Result<()> {
     let mut args = std::env::args();
     let config_file = BaseDirectories::with_prefix("kilo-ed")?.find_config_file("init");
@@ -32,11 +34,12 @@ fn main() -> Result<()> {
         // Failsafe: if the file failed to read, then fall back to the defaults
         default_config().build().unwrap()
     };
+    let options = Options::new(&config);
 
     let mut editor = if args.len() >= 2 {
-        Editor::with_file(config, args.nth(1).unwrap())?
+        Editor::with_file(options, args.nth(1).unwrap())?
     } else {
-        Editor::new(config)?
+        Editor::new(options)?
     };
 
     editor.start()?;

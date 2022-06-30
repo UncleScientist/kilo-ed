@@ -1,7 +1,6 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use config::Config;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::{terminal, Result};
 use errno::errno;
@@ -59,35 +58,25 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn with_file<P: AsRef<Path> + ToString>(config: Config, filename: P) -> Result<Self> {
+    pub fn with_file<P: AsRef<Path> + ToString>(options: Options, filename: P) -> Result<Self> {
         let fn_string = filename.to_string();
         let lines = std::fs::read_to_string(filename)
             .expect("Unable to open file")
             .split('\n')
             .map(|x| x.into())
             .collect::<Vec<String>>();
-        Editor::build(&lines, fn_string, config)
+        Editor::build(&lines, fn_string, options)
     }
 
-    pub fn new(config: Config) -> Result<Self> {
-        Editor::build(&[], "", config)
+    pub fn new(options: Options) -> Result<Self> {
+        Editor::build(&[], "", options)
     }
 
-    fn build<T: Into<String>>(data: &[String], filename: T, config: Config) -> Result<Self> {
+    fn build<T: Into<String>>(data: &[String], filename: T, options: Options) -> Result<Self> {
         let filename: String = filename.into();
         let hldb = EditorSyntax::new();
         let syntax = Editor::find_highlight(&hldb, filename.as_str());
         let syntax_data = syntax.map(|idx| hldb[idx].clone());
-
-        let line_num_config =
-            read_config_parameter::<LineNumbers>(&config, "display", "line_numbers");
-
-        let soft_wrap = read_config_parameter::<LineDisplay>(&config, "display", "soft_wrap");
-
-        let options = Options {
-            lines: line_num_config,
-            soft_wrap,
-        };
 
         let mut ed = Self {
             filename,
@@ -730,26 +719,13 @@ impl Editor {
     }
 }
 
-fn read_config_parameter<T: ConvertOptString + From<String>>(
-    config: &Config,
-    table: &str,
-    key: &str,
-) -> T {
-    let table = if let Ok(table) = config.get_table(table) {
-        table
-    } else {
-        return T::default();
-    };
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    let value = if let Some(value) = table.get(key) {
-        value
-    } else {
-        return T::default();
-    };
-
-    if let Ok(value) = value.clone().into_string() {
-        value.into()
-    } else {
-        T::default()
+    #[test]
+    fn first_row_is_empty() {
+        let ed = Editor::new(Options::default()).expect("failed to create editor");
+        assert_eq!(ed.current_row_len(), 0);
     }
 }
