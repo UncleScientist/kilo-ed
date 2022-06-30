@@ -54,7 +54,7 @@ pub struct Editor {
     saved_hl: Option<usize>,
     hldb: Vec<EditorSyntax>,
     syntax: Option<usize>, // index into hldb
-                           // config: Config,
+    options: Options,
 }
 
 impl Editor {
@@ -108,7 +108,7 @@ impl Editor {
             saved_hl: None,
             hldb,
             syntax,
-            // config,
+            options,
         };
 
         let mut in_comment = false;
@@ -437,14 +437,20 @@ impl Editor {
     fn insert_newline(&mut self) {
         let row = self.cursor.y as usize;
 
-        if self.cursor.x == 0 {
+        self.cursor.x = if self.cursor.x == 0 {
             self.insert_row(row, String::from(""));
+            0
         } else {
             let new_row = self.rows[row].split(self.cursor.x as usize);
-            self.insert_row(row + 1, new_row);
-        }
+            let indent_level = if self.options.auto_indent == Indentation::On {
+                self.rows[row].indent_level()
+            } else {
+                0
+            };
+            self.insert_row(row + 1, format!("{:0indent_level$}{new_row}", ""));
+            indent_level as u16
+        };
         self.cursor.y += 1;
-        self.cursor.x = 0;
     }
 
     fn insert_row(&mut self, at: usize, s: String) {

@@ -13,7 +13,7 @@ impl From<String> for LineNumbers {
         match s.as_str() {
             "absolute" => LineNumbers::Absolute,
             "relative" => LineNumbers::Relative,
-            _ => LineNumbers::Off,
+            _ => LineNumbers::default(),
         }
     }
 }
@@ -25,6 +25,32 @@ impl Default for LineNumbers {
 }
 
 impl ConvertOptString for LineNumbers {}
+
+// -----------------------------------------------------------------------------
+//     - Auto-Indentation -
+// -----------------------------------------------------------------------------
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Indentation {
+    On,
+    Off,
+}
+
+impl From<String> for Indentation {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "on" => Indentation::On,
+            _ => Indentation::default(),
+        }
+    }
+}
+
+impl Default for Indentation {
+    fn default() -> Self {
+        Indentation::Off
+    }
+}
+
+impl ConvertOptString for Indentation {}
 
 // -----------------------------------------------------------------------------
 //     - Line Display-
@@ -40,7 +66,7 @@ impl From<String> for LineDisplay {
     fn from(s: String) -> LineDisplay {
         match s.as_str() {
             "wrap" => LineDisplay::Wrap,
-            _ => LineDisplay::Scroll,
+            _ => LineDisplay::default(),
         }
     }
 }
@@ -62,17 +88,19 @@ use config::Config;
 pub struct Options {
     pub lines: LineNumbers,
     pub soft_wrap: LineDisplay,
+    pub auto_indent: Indentation,
 }
 
 impl Options {
     pub fn new(config: &Config) -> Self {
-        let line_num_config =
-            read_config_parameter::<LineNumbers>(config, "display", "line_numbers");
+        let lines = read_config_parameter::<LineNumbers>(config, "display", "line_numbers");
         let soft_wrap = read_config_parameter::<LineDisplay>(config, "display", "soft_wrap");
+        let auto_indent = read_config_parameter::<Indentation>(config, "display", "auto_indent");
 
         Self {
-            lines: line_num_config,
+            lines,
             soft_wrap,
+            auto_indent,
         }
     }
 
@@ -132,5 +160,15 @@ mod test {
         let options = Options::new(&config);
         assert_eq!(options.lines, LineNumbers::Absolute);
         assert_eq!(options.soft_wrap, LineDisplay::Scroll);
+    }
+
+    #[test]
+    fn config_can_set_auto_indent() {
+        let config = Config::builder()
+            .add_source(File::new("tests/auto-indent-on", FileFormat::Ini))
+            .build()
+            .expect("failed to build config");
+        let options = Options::new(&config);
+        assert_eq!(options.auto_indent, Indentation::On);
     }
 }
