@@ -52,7 +52,7 @@ impl Screen {
         let mut gaps = 0;
 
         for row in 0..self.height {
-            if self.options.soft_wrap && row + gaps >= self.height {
+            if self.options.soft_wrap() && row + gaps >= self.height {
                 break;
             }
             let filerow = (row + rowoff) as usize;
@@ -108,12 +108,12 @@ impl Screen {
                         )?;
                 }
 
-                let start = if self.options.soft_wrap {
+                let start = if self.options.soft_wrap() {
                     0
                 } else {
                     coloff as usize
                 };
-                let end = if !self.options.soft_wrap {
+                let end = if !self.options.soft_wrap() {
                     let mut len = rows[filerow].render_len();
                     if len < coloff as usize {
                         continue;
@@ -172,7 +172,7 @@ impl Screen {
                                 hl = hl_iter.next();
                             }
                         }
-                        if !self.options.soft_wrap {
+                        if !self.options.soft_wrap() {
                             break;
                         }
                         screen_row_count += 1;
@@ -192,7 +192,7 @@ impl Screen {
         self.stdout
             .queue(terminal::Clear(terminal::ClearType::All))?
             .queue(cursor::MoveTo(0, 0))?;
-        Ok(if self.options.soft_wrap {
+        Ok(if self.options.soft_wrap() {
             let mut count = 0;
             let mut display_height = 0u16;
             for r in &rows[rowoff as usize..] {
@@ -204,7 +204,7 @@ impl Screen {
             }
             count
         } else {
-            0
+            self.height
         })
     }
 
@@ -222,13 +222,13 @@ impl Screen {
         let display_width = self.width - self.ln_shift;
         let shift_y = pos.x / display_width;
 
-        let pos_x = if self.options.soft_wrap {
+        let pos_x = if self.options.soft_wrap() {
             pos.x % display_width + self.ln_shift
         } else {
             render_x - coloff + self.ln_shift
         };
 
-        let pos_y = if self.options.soft_wrap {
+        let pos_y = if self.options.soft_wrap() {
             pos.y - rowoff + shift_y + self.gaps[(pos.y - rowoff) as usize]
         } else {
             pos.y - rowoff

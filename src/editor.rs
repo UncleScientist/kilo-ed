@@ -79,25 +79,10 @@ impl Editor {
         let syntax = Editor::find_highlight(&hldb, filename.as_str());
         let syntax_data = syntax.map(|idx| hldb[idx].clone());
 
-        let line_num_config = {
-            if let Some(lno) = read_config_parameter(&config, "display", "line_numbers") {
-                match lno.as_str() {
-                    "absolute" => LineNumbers::Absolute,
-                    "relative" => LineNumbers::Relative,
-                    _ => LineNumbers::Off,
-                }
-            } else {
-                LineNumbers::Off
-            }
-        };
+        let line_num_config =
+            read_config_parameter::<LineNumbers>(&config, "display", "line_numbers");
 
-        let soft_wrap = {
-            if let Some(sw) = read_config_parameter(&config, "display", "soft_wrap") {
-                matches!(sw.as_str(), "true")
-            } else {
-                false
-            }
-        };
+        let soft_wrap = read_config_parameter::<LineDisplay>(&config, "display", "soft_wrap");
 
         let options = Options {
             lines: line_num_config,
@@ -745,12 +730,26 @@ impl Editor {
     }
 }
 
-fn read_config_parameter(config: &Config, table: &str, key: &str) -> Option<String> {
-    config
-        .get_table(table)
-        .ok()?
-        .get(key)?
-        .clone()
-        .into_string()
-        .ok()
+fn read_config_parameter<T: ConvertOptString + From<String>>(
+    config: &Config,
+    table: &str,
+    key: &str,
+) -> T {
+    let table = if let Ok(table) = config.get_table(table) {
+        table
+    } else {
+        return T::default();
+    };
+
+    let value = if let Some(value) = table.get(key) {
+        value
+    } else {
+        return T::default();
+    };
+
+    if let Ok(value) = value.clone().into_string() {
+        value.into()
+    } else {
+        T::default()
+    }
 }
