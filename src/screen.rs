@@ -197,7 +197,8 @@ impl Screen {
             let mut display_height = 0u16;
             for r in &rows[rowoff as usize..] {
                 count += 1;
-                display_height += (r.len() / ((self.width - self.ln_shift) as usize) + 1) as u16;
+                display_height +=
+                    (r.render_len() / ((self.width - self.ln_shift) as usize) + 1) as u16;
                 if display_height >= self.height {
                     break;
                 }
@@ -220,10 +221,10 @@ impl Screen {
         coloff: u16,
     ) -> Result<()> {
         let display_width = self.width - self.ln_shift;
-        let shift_y = pos.x / display_width;
+        let shift_y = render_x / display_width;
 
         let pos_x = if self.options.soft_wrap() {
-            pos.x % display_width + self.ln_shift
+            render_x % display_width + self.ln_shift
         } else {
             render_x - coloff + self.ln_shift
         };

@@ -229,7 +229,7 @@ impl Row {
             }
 
             if (syntax.flags & highlight::NUMBERS) != 0
-                && ((c.is_digit(10) && (prev_sep || prev_hl == Highlight::Number))
+                && ((c.is_ascii_digit() && (prev_sep || prev_hl == Highlight::Number))
                     || (c == '.' && prev_hl == Highlight::Number))
             {
                 self.hl[i] = Highlight::Number;
