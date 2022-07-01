@@ -99,11 +99,20 @@ impl Row {
     }
 
     /* returns true if row was modified, false otherwise */
-    pub fn del_char(&mut self, at: usize) -> bool {
+    pub fn del_char(&mut self, at: usize, to_previous_tabstop: bool) -> bool {
+        // 123456
         if at >= self.chars.len() {
             false
         } else {
             self.chars.remove(at);
+
+            if to_previous_tabstop && at == self.chars.len() {
+                let prev_stop = self.chars.len() - (self.chars.len() % KILO_TAB_STOP);
+                while self.chars.ends_with(' ') && self.chars.len() > prev_stop {
+                    self.chars.pop();
+                }
+            }
+
             self.render_row();
             true
         }

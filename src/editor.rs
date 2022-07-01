@@ -420,9 +420,16 @@ impl Editor {
         let cur_row = self.cursor.y as usize;
 
         if self.cursor.x > 0 {
-            if self.rows[cur_row].del_char(self.cursor.x as usize - 1) {
+            if self.rows[cur_row].del_char(
+                self.cursor.x as usize - 1,
+                self.options.auto_indent == Indentation::On,
+            ) {
                 self.dirty += 1;
-                self.cursor.x -= 1;
+                if self.cursor.x >= self.rows[cur_row].len() as u16 {
+                    self.cursor.x = self.rows[cur_row].len() as u16;
+                } else {
+                    self.cursor.x -= 1;
+                }
             }
         } else {
             self.cursor.x = self.rows[cur_row - 1].len() as u16;
