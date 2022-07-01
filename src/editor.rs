@@ -140,6 +140,22 @@ impl Editor {
                     KeypressResult::Quitting => {}
                 },
                 InputEvent::Resize(col, row) => self.screen.resize(col, row),
+                InputEvent::ScrollUp => {
+                    if self.cursor.y > self.rowoff {
+                        self.cursor.y = self.rowoff;
+                    } else {
+                        self.move_cursor(EditorKey::Up);
+                    }
+                }
+                InputEvent::ScrollDown => {
+                    let bounds = self.screen.bounds();
+                    let new_pos = (self.rowoff + bounds.y - 1).min(self.rows.len() as u16);
+                    if self.cursor.y < new_pos {
+                        self.cursor.y = new_pos;
+                    } else {
+                        self.move_cursor(EditorKey::Down);
+                    }
+                }
             }
         } else {
             self.die("Unable to read from keyboard");
@@ -157,6 +173,7 @@ impl Editor {
 
     pub fn start(&mut self) -> Result<()> {
         terminal::enable_raw_mode()?;
+        self.screen.capture_mouse()?;
 
         loop {
             if self.refresh_screen().is_err() {
@@ -169,6 +186,7 @@ impl Editor {
                 break;
             }
         }
+        self.screen.release_mouse()?;
         terminal::disable_raw_mode()
     }
 

@@ -40,6 +40,14 @@ impl Screen {
         })
     }
 
+    pub fn capture_mouse(&mut self) -> Result<()> {
+        crossterm::execute!(self.stdout, crossterm::event::EnableMouseCapture)
+    }
+
+    pub fn release_mouse(&mut self) -> Result<()> {
+        crossterm::execute!(self.stdout, crossterm::event::DisableMouseCapture)
+    }
+
     pub fn resize(&mut self, columns: u16, rows: u16) {
         self.width = columns;
         self.height = rows - 2;
