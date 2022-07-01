@@ -13,6 +13,12 @@ use crate::options::*;
 use crate::row::*;
 use crate::screen::*;
 
+enum KeypressResult {
+    Continue,
+    ExitEditor,
+    Quitting,
+}
+
 enum PromptKey {
     Enter,
     Escape,
@@ -120,142 +126,21 @@ impl Editor {
         Ok(ed)
     }
 
-    pub fn process_keypress(&mut self) -> Result<bool> {
+    pub fn process_event(&mut self) -> bool {
         let prev_dirty = self.dirty;
         let event = self.keyboard.read();
         if let Ok(c) = event {
+            #[cfg(feature = "keystroke_log")]
+            eprintln!("{c:?}");
+
             match c {
-                /*
-                 * Ctrl-Q to quit
-                 */
-                KeyEvent {
-                    code: KeyCode::Char('q'),
-                    modifiers: KeyModifiers::CONTROL,
-                } => {
-                    if self.dirty > 0 && self.quit_times > 0 {
-                        self.set_status_message(format!(
-                            "WARNING!!! File has unsaved changes. \
-                                Press Ctrl-Q {} more times to quit.",
-                            self.quit_times
-                        ));
-                        self.quit_times -= 1;
-                        return Ok(false);
-                    } else {
-                        return Ok(true);
-                    }
-                }
-
-                /*
-                 * Ctrl-S to save
-                 */
-                KeyEvent {
-                    code: KeyCode::Char('s'),
-                    modifiers: KeyModifiers::CONTROL,
-                } => {
-                    self.save();
-                }
-
-                /*
-                 * Ctrl-F to find
-                 */
-                KeyEvent {
-                    code: KeyCode::Char('f'),
-                    modifiers: KeyModifiers::CONTROL,
-                } => {
-                    self.find();
-                }
-
-                /*
-                 * Ignore Ctrl-L and Escape keys
-                 */
-                KeyEvent {
-                    code: KeyCode::Char('l'),
-                    modifiers: KeyModifiers::CONTROL,
-                }
-                | KeyEvent {
-                    code: KeyCode::Esc, ..
-                } => {}
-
-                /*
-                 * Ctrl-h or Backspace or Delete to delete characters
-                 */
-                KeyEvent {
-                    code: KeyCode::Char('h'),
-                    modifiers: KeyModifiers::CONTROL,
-                }
-                | KeyEvent {
-                    code: KeyCode::Backspace,
-                    ..
-                }
-                | KeyEvent {
-                    code: KeyCode::Delete,
-                    ..
-                } => {
-                    if let KeyEvent {
-                        code: KeyCode::Delete,
-                        ..
-                    } = c
-                    {
-                        self.move_cursor(EditorKey::Right);
-                    }
-                    self.del_char();
-                }
-
-                /*
-                 * Any 'regular' key gets inserted
-                 */
-                KeyEvent {
-                    code: KeyCode::Char(key),
-                    modifiers: KeyModifiers::NONE,
-                }
-                | KeyEvent {
-                    code: KeyCode::Char(key),
-                    modifiers: KeyModifiers::SHIFT,
-                } => self.insert_char(key),
-
-                KeyEvent {
-                    code: KeyCode::Tab,
-                    modifiers: KeyModifiers::NONE,
-                } => self.insert_char('\t'),
-
-                /*
-                 * Handle all other special keycodes
-                 */
-                KeyEvent { code, .. } => match code {
-                    KeyCode::Enter => {
-                        self.insert_newline();
-                    }
-                    KeyCode::Home => self.cursor.x = 0,
-                    KeyCode::End => self.cursor.x = self.current_row_len(),
-                    KeyCode::Up => self.move_cursor(EditorKey::Up),
-                    KeyCode::Down => self.move_cursor(EditorKey::Down),
-                    KeyCode::Left => self.move_cursor(EditorKey::Left),
-                    KeyCode::Right => self.move_cursor(EditorKey::Right),
-                    KeyCode::PageUp | KeyCode::PageDown => {
-                        let bounds = self.screen.bounds();
-
-                        match code {
-                            KeyCode::PageUp => self.cursor.y = self.rowoff,
-                            KeyCode::PageDown => {
-                                self.cursor.y =
-                                    (self.rowoff + bounds.y - 1).min(self.rows.len() as u16);
-                            }
-                            _ => panic!("rust compiler broke"),
-                        }
-
-                        for _ in 0..bounds.y {
-                            self.move_cursor(if code == KeyCode::PageUp {
-                                EditorKey::Up
-                            } else {
-                                EditorKey::Down
-                            })
-                        }
-                    }
-                    _ => {}
+                InputEvent::Key(key) => match self.process_keypress(key) {
+                    KeypressResult::ExitEditor => return true,
+                    KeypressResult::Continue => self.quit_times = KILO_QUIT_TIMES,
+                    KeypressResult::Quitting => {}
                 },
+                InputEvent::Resize(col, row) => self.screen.resize(col, row),
             }
-        } else if let Err(ResultCode::Resized(col, row)) = event {
-            self.screen.resize(col, row);
         } else {
             self.die("Unable to read from keyboard");
         }
@@ -267,8 +152,7 @@ impl Editor {
             self.update_remaining_lines(self.cursor.y as usize, prev_row_status);
         }
 
-        self.quit_times = KILO_QUIT_TIMES;
-        Ok(false)
+        false
     }
 
     pub fn start(&mut self) -> Result<()> {
@@ -281,7 +165,7 @@ impl Editor {
             self.screen
                 .move_to(&self.cursor, self.render_x, self.rowoff, self.coloff)?;
             self.screen.flush()?;
-            if self.process_keypress()? {
+            if self.process_event() {
                 break;
             }
         }
@@ -521,8 +405,13 @@ impl Editor {
             let _ = self.refresh_screen();
 
             let _ = self.screen.flush();
-            if let Ok(c) = self.keyboard.read() {
+            if let Ok(input_event) = self.keyboard.read() {
                 let mut prompt_key: Option<PromptKey> = None;
+                let c = if let InputEvent::Key(c) = input_event {
+                    c
+                } else {
+                    continue;
+                };
                 match c {
                     KeyEvent {
                         code: KeyCode::Enter,
@@ -729,6 +618,141 @@ impl Editor {
                 None
             }
         }
+    }
+
+    fn process_keypress(&mut self, key: KeyEvent) -> KeypressResult {
+        match key {
+            /*
+             * Ctrl-Q to quit
+             */
+            KeyEvent {
+                code: KeyCode::Char('q'),
+                modifiers: KeyModifiers::CONTROL,
+            } => {
+                if self.dirty > 0 && self.quit_times > 0 {
+                    self.set_status_message(format!(
+                        "WARNING!!! File has unsaved changes. \
+                                Press Ctrl-Q {} more times to quit.",
+                        self.quit_times
+                    ));
+                    self.quit_times -= 1;
+                    return KeypressResult::Quitting;
+                } else {
+                    return KeypressResult::ExitEditor;
+                }
+            }
+
+            /*
+             * Ctrl-S to save
+             */
+            KeyEvent {
+                code: KeyCode::Char('s'),
+                modifiers: KeyModifiers::CONTROL,
+            } => {
+                self.save();
+            }
+
+            /*
+             * Ctrl-F to find
+             */
+            KeyEvent {
+                code: KeyCode::Char('f'),
+                modifiers: KeyModifiers::CONTROL,
+            } => {
+                self.find();
+            }
+
+            /*
+             * Ignore Ctrl-L and Escape keys
+             */
+            KeyEvent {
+                code: KeyCode::Char('l'),
+                modifiers: KeyModifiers::CONTROL,
+            }
+            | KeyEvent {
+                code: KeyCode::Esc, ..
+            } => {}
+
+            /*
+             * Ctrl-h or Backspace or Delete to delete characters
+             */
+            KeyEvent {
+                code: KeyCode::Char('h'),
+                modifiers: KeyModifiers::CONTROL,
+            }
+            | KeyEvent {
+                code: KeyCode::Backspace,
+                ..
+            }
+            | KeyEvent {
+                code: KeyCode::Delete,
+                ..
+            } => {
+                if let KeyEvent {
+                    code: KeyCode::Delete,
+                    ..
+                } = key
+                {
+                    self.move_cursor(EditorKey::Right);
+                }
+                self.del_char();
+            }
+
+            /*
+             * Any 'regular' key gets inserted
+             */
+            KeyEvent {
+                code: KeyCode::Char(key),
+                modifiers: KeyModifiers::NONE,
+            }
+            | KeyEvent {
+                code: KeyCode::Char(key),
+                modifiers: KeyModifiers::SHIFT,
+            } => self.insert_char(key),
+
+            KeyEvent {
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::NONE,
+            } => self.insert_char('\t'),
+
+            /*
+             * Handle all other special keycodes
+             */
+            KeyEvent { code, .. } => match code {
+                KeyCode::Enter => {
+                    self.insert_newline();
+                }
+                KeyCode::Home => self.cursor.x = 0,
+                KeyCode::End => self.cursor.x = self.current_row_len(),
+                KeyCode::Up => self.move_cursor(EditorKey::Up),
+                KeyCode::Down => self.move_cursor(EditorKey::Down),
+                KeyCode::Left => self.move_cursor(EditorKey::Left),
+                KeyCode::Right => self.move_cursor(EditorKey::Right),
+                KeyCode::PageUp | KeyCode::PageDown => {
+                    let bounds = self.screen.bounds();
+
+                    match code {
+                        KeyCode::PageUp => self.cursor.y = self.rowoff,
+                        KeyCode::PageDown => {
+                            self.cursor.y =
+                                (self.rowoff + bounds.y - 1).min(self.rows.len() as u16);
+                        }
+                        _ => panic!("rust compiler broke"),
+                    }
+
+                    for _ in 0..bounds.y {
+                        self.move_cursor(if code == KeyCode::PageUp {
+                            EditorKey::Up
+                        } else {
+                            EditorKey::Down
+                        })
+                    }
+                }
+                _ => {}
+            },
+        }
+
+        KeypressResult::Continue
     }
 }
 
