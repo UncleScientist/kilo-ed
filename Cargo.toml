@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 config = "0.13.1"
 crossterm = "0.23.2"
-errno = "0.2.8"
 xdg = "2.4.1"
 
 [features]
