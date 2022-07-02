@@ -403,11 +403,11 @@ impl Editor {
 
         let buf = self.rows_to_string();
         let len = buf.as_bytes().len();
-        if std::fs::write(&self.filename, &buf).is_ok() {
+        if let Err(e) = std::fs::write(&self.filename, &buf) {
+            self.set_status_message(&format!("Can't save! I/O error: {e}"))
+        } else {
             self.dirty = 0;
             self.set_status_message(&format!("{len} bytes written to disk"));
-        } else {
-            self.set_status_message(&format!("Can't save! I/O error: {}", errno()));
         }
     }
 
