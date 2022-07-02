@@ -4,6 +4,14 @@ pub enum ResultCode {
     KeyReadFail,
 }
 
+impl std::fmt::Display for ResultCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResultCode::KeyReadFail => write!(f, "failed to read key"),
+        }
+    }
+}
+
 #[derive(Default, Clone, Copy)]
 pub struct Position {
     pub x: u16,
