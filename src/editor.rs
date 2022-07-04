@@ -1,9 +1,9 @@
+use std::fmt::Display;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::{terminal, Result};
-use errno::errno;
 
 use kilo_ed::*;
 
@@ -129,36 +129,39 @@ impl Editor {
     pub fn process_event(&mut self) -> bool {
         let prev_dirty = self.dirty;
         let event = self.keyboard.read();
-        if let Ok(c) = event {
-            #[cfg(feature = "keystroke_log")]
-            eprintln!("{c:?}");
+        match event {
+            Ok(c) => {
+                #[cfg(feature = "keystroke_log")]
+                eprintln!("{c:?}");
 
-            match c {
-                InputEvent::Key(key) => match self.process_keypress(key) {
-                    KeypressResult::ExitEditor => return true,
-                    KeypressResult::Continue => self.quit_times = KILO_QUIT_TIMES,
-                    KeypressResult::Quitting => {}
-                },
-                InputEvent::Resize(col, row) => self.screen.resize(col, row),
-                InputEvent::ScrollUp => {
-                    if self.cursor.y > self.rowoff {
-                        self.cursor.y = self.rowoff;
-                    } else {
-                        self.move_cursor(EditorKey::Up);
+                match c {
+                    InputEvent::Key(key) => match self.process_keypress(key) {
+                        KeypressResult::ExitEditor => return true,
+                        KeypressResult::Continue => self.quit_times = KILO_QUIT_TIMES,
+                        KeypressResult::Quitting => {}
+                    },
+                    InputEvent::Resize(col, row) => self.screen.resize(col, row),
+                    InputEvent::ScrollUp => {
+                        if self.cursor.y > self.rowoff {
+                            self.cursor.y = self.rowoff;
+                        } else {
+                            self.move_cursor(EditorKey::Up);
+                        }
                     }
-                }
-                InputEvent::ScrollDown => {
-                    let bounds = self.screen.bounds();
-                    let new_pos = (self.rowoff + bounds.y - 1).min(self.rows.len() as u16);
-                    if self.cursor.y < new_pos {
-                        self.cursor.y = new_pos;
-                    } else {
-                        self.move_cursor(EditorKey::Down);
+                    InputEvent::ScrollDown => {
+                        let bounds = self.screen.bounds();
+                        let new_pos = (self.rowoff + bounds.y - 1).min(self.rows.len() as u16);
+                        if self.cursor.y < new_pos {
+                            self.cursor.y = new_pos;
+                        } else {
+                            self.move_cursor(EditorKey::Down);
+                        }
                     }
                 }
             }
-        } else {
-            self.die("Unable to read from keyboard");
+            Err(e) => {
+                self.die("Unable to read from keyboard", e);
+            }
         }
 
         // if the text changed, then update the syntax highlighting
@@ -176,8 +179,8 @@ impl Editor {
         self.screen.capture_mouse()?;
 
         loop {
-            if self.refresh_screen().is_err() {
-                self.die("unable to refresh screen");
+            if let Err(e) = self.refresh_screen() {
+                self.die("unable to refresh screen", e);
             }
             self.screen
                 .move_to(&self.cursor, self.render_x, self.rowoff, self.coloff)?;
@@ -228,10 +231,10 @@ impl Editor {
         )
     }
 
-    pub fn die<S: Into<String>>(&mut self, message: S) {
+    pub fn die<S1: Display, S2: Display>(&mut self, message: S1, err: S2) {
         let _ = self.screen.clear(&self.rows, 0);
         let _ = terminal::disable_raw_mode();
-        eprintln!("{}: {}", message.into(), errno());
+        eprintln!("{}: {}", message, err);
         std::process::exit(1);
     }
 
@@ -403,11 +406,11 @@ impl Editor {
 
         let buf = self.rows_to_string();
         let len = buf.as_bytes().len();
-        if std::fs::write(&self.filename, &buf).is_ok() {
+        if let Err(e) = std::fs::write(&self.filename, &buf) {
+            self.set_status_message(&format!("Can't save! I/O error: {e}"))
+        } else {
             self.dirty = 0;
             self.set_status_message(&format!("{len} bytes written to disk"));
-        } else {
-            self.set_status_message(&format!("Can't save! I/O error: {}", errno()));
         }
     }
 
